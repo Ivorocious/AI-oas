@@ -4,7 +4,7 @@
 
 **Phase 1 — Technical Design and Engineering Foundation: underway.**
 
-Phase 0 product definition is complete. The domain model, lifecycle state machines, queue behavior, invariants, and canonical-state boundaries required for this Phase 1 task are now defined. Application implementation has not started.
+Phase 0 product definition is complete. The domain model, lifecycle state machines, queue behavior, canonical-state boundaries, and implementation-neutral API/event contracts are now defined. Application implementation has not started.
 
 ## Completed work
 
@@ -13,13 +13,16 @@ Phase 0 product definition is complete. The domain model, lifecycle state machin
 - Defined all required records, ownership boundaries, relationships, sensitive-data considerations, authorities, versioning expectations, and transaction boundaries in the [domain model](domain-model.md).
 - Defined inbound-delivery, service-request, proposed-action, and integration-attempt lifecycle states, guards, authorities, audit events, failures, queues, invariants, and recovery behavior in the [state-machine design](state-machines.md).
 - Aligned every permitted material proposal revision with an atomic parent-request transition so no request remains executable, awaiting approval, or retryable for a superseded proposal.
+- Defined `/api/v1` command/query boundaries, intake outcomes, expected-version and error semantics, command idempotency, guarded n8n callbacks, and read models in the [API contracts](api-contracts.md).
+- Defined PII-minimized event envelopes, at-least-once delivery, aggregate-version ordering, consumer deduplication, transactional-outbox compatibility, and n8n authority limits in the [event contracts](event-contracts.md).
 - Mapped all 12 approved demo scenarios to starting states, commands, guards, final states, queues, audit evidence, and outbound-attempt expectations.
 - Accepted [ADR 0001](decisions/0001-canonical-state-and-lifecycle-boundaries.md) for canonical state and lifecycle boundaries.
+- Accepted [ADR 0002](decisions/0002-api-command-and-event-boundaries.md) for HTTP commands, events, and orchestration boundaries.
 - Preserved the requirement that the outbound provider is mock-only and sends no real email.
 
 ## Active task
 
-None. The domain-model and lifecycle-state-machine design task is complete; the next focused Phase 1 task has not started.
+None. The API and event contract design task is complete; the next focused Phase 1 task has not started.
 
 ## Blockers
 
@@ -39,18 +42,22 @@ None known for the completed design task. Implementation should not begin until 
 - Important backend-controlled state transitions and audit events are transactionally consistent and append-oriented.
 - Mutable aggregates use optimistic version checks or equivalent atomic conflict protection.
 - Domain IDs use UUIDs, timestamps use UTC, and operational/audit records are not hard-deleted in the MVP.
+- The proposed API prefix is `/api/v1`; meaningful commands mutate state, queries are read-only, and generic status/queue/priority patch endpoints are prohibited.
+- Mutable commands carry expected aggregate versions; stale versions return `409 CONCURRENCY_CONFLICT`, and business guards return specific stable `409` codes.
+- Integration events use at-least-once delivery with UUID event deduplication and aggregate-version ordering; audit events remain separate canonical evidence.
+- n8n can request guarded commands and report evidence only for backend-created attempts; it cannot submit authoritative lifecycle decisions.
 
 ## Technical debt and deferred design
 
 The following focused decisions remain before implementation:
 
-- API command, query, webhook, and event contracts, including error and concurrency responses
+- Exact OpenAPI component schemas, field constraints, generated examples, and contract-test fixtures
 - Exact role-permission matrix and MVP authentication approach
 - Database schema, constraints, indexes, transaction patterns, retention, and archival behavior
 - Exact deterministic priority/routing criteria, duplicate-detection policy, confidence threshold, and operator-override policy
 - Audit event schemas, redaction rules, access controls, and retention policy
 - Failure taxonomy, retry limits/backoff, and uncertain-outcome reconciliation
-- n8n workflow contracts, correlation behavior, and backend callback security
+- Concrete n8n workflows, event transport, callback authentication, correlation storage, and publisher/dead-letter policy
 - AI and outbound adapter interfaces, timeouts, validation, and contract-test strategy
 - Test architecture and executable scenario fixtures for every invariant and demo path
 - Deployment, environment, observability, and recovery design
@@ -58,7 +65,7 @@ The following focused decisions remain before implementation:
 ## Known limitations
 
 - The repository contains documentation only; no frontend, backend, database, workflow, integration, automated test, or deployment exists.
-- State machines are implementation-neutral and do not yet specify API payloads or database constraints.
+- API and event contracts are implementation-neutral and do not yet specify final field constraints, authentication, transport, or database enforcement.
 - Exact numeric thresholds, retry counts, scoring formulas, and permission mappings remain intentionally undefined.
 - No real email is sent; only a proposed mock adapter is approved for the MVP.
 - The design targets one demonstration organization, one primary intake path, and modest operational scale.
@@ -66,4 +73,4 @@ The following focused decisions remain before implementation:
 
 ## Next milestone
 
-**Phase 1 focused design — API and event contracts.** Define implementation-neutral backend commands, queries, webhook responses, domain-event envelopes, concurrency/idempotency error semantics, and n8n callback boundaries against the approved state machines. Follow with the role-permission matrix and persistence design before scaffolding application code.
+**Phase 1 focused design — role permissions and persistence constraints.** Define the actor/permission matrix, authentication and service-identity assumptions, Postgres schema constraints, command-idempotency records, transaction patterns, and transactional-outbox persistence before scaffolding application code.

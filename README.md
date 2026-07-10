@@ -6,15 +6,18 @@ The product remains configurable across service companies instead of assuming a 
 
 ## Status
 
-Phase 0 — Product Definition is complete. Phase 1 — Technical Design and Engineering Foundation is underway, with the domain model and lifecycle state machines now defined. Application implementation has not started.
+Phase 0 — Product Definition is complete. Phase 1 — Technical Design and Engineering Foundation is underway, with the domain model, lifecycle state machines, and proposed API/event contracts now defined. Application implementation has not started.
 
 - [Product brief](docs/product-brief.md)
 - [Proposed architecture](docs/architecture.md)
 - [Proposed domain model](docs/domain-model.md)
 - [Proposed lifecycle state machines](docs/state-machines.md)
-- [Architecture decisions](docs/decisions/0001-canonical-state-and-lifecycle-boundaries.md)
+- [Proposed API contracts](docs/api-contracts.md)
+- [Proposed event and n8n contracts](docs/event-contracts.md)
+- [ADR 0001: canonical lifecycle state](docs/decisions/0001-canonical-state-and-lifecycle-boundaries.md)
+- [ADR 0002: API and event boundaries](docs/decisions/0002-api-command-and-event-boundaries.md)
 - [Project status](docs/project-status.md)
 
 ## Implementation honesty
 
-This repository currently contains product and technical-design documentation only. It does not yet contain a working frontend, backend, database, n8n workflow, AI integration, email integration, or deployment. Any architecture and lifecycle design described here is proposed rather than implemented.
+This repository currently contains product and technical-design documentation only. It does not yet contain a working frontend, backend, database, n8n workflow, AI integration, email integration, or deployment. The architecture, lifecycle, API, and event designs described here are proposed rather than implemented.

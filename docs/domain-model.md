@@ -64,7 +64,8 @@ These values may change together in one backend transaction, but they are not al
 
 | Requirement | Important fields |
 | --- | --- |
-| Required | `id`, source/channel, idempotency key, canonical payload hash, received timestamp, processing status, schema version, optimistic `version` |
+| Required | `id`, source/channel, idempotency key, received timestamp, processing status, schema version, optimistic `version` |
+| Conditionally required | Canonical payload hash when the body can be canonicalized; raw-body fingerprint when malformed content is still safely identifiable and recorded |
 | Optional until classified or applicable | Idempotency outcome, source delivery identifier, sanitized/raw payload reference, normalized payload, linked original delivery, linked `ServiceRequest`, rejection reasons, failure classification and sanitized error, completed timestamp |
 
 ### Relationships and behavior

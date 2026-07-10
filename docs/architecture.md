@@ -2,7 +2,7 @@
 
 ## Status and intent
 
-This document describes a proposed conceptual architecture for the AI Operations Automation Suite MVP. None of these application components has been implemented. The design supports the approved [product brief](product-brief.md), [domain model](domain-model.md), [lifecycle state machines](state-machines.md), and [canonical-state decision](decisions/0001-canonical-state-and-lifecycle-boundaries.md) while keeping business policy testable, integrations replaceable, and important actions auditable.
+This document describes a proposed conceptual architecture for the AI Operations Automation Suite MVP. None of these application components has been implemented. The design supports the approved [product brief](product-brief.md), [domain model](domain-model.md), [lifecycle state machines](state-machines.md), [API contracts](api-contracts.md), [event/n8n contracts](event-contracts.md), and architecture decisions [0001](decisions/0001-canonical-state-and-lifecycle-boundaries.md) and [0002](decisions/0002-api-command-and-event-boundaries.md) while keeping business policy testable, integrations replaceable, and important actions auditable.
 
 ## Component view
 
@@ -17,8 +17,10 @@ flowchart LR
     B --> O["Outbound adapter interface"]
     O --> M["Mock email provider only"]
     B --> E["Audit and event logging"]
-    N --> E
     E --> D
+    B --> X["Integration events / future outbox"]
+    X --> D
+    X -.->|at-least-once delivery| N
 ```
 
 Arrows show proposed request or event flow, not deployed connections. The backend remains the authority for canonical state and business decisions.
@@ -33,7 +35,7 @@ Arrows show proposed request or event flow, not deployed connections. The backen
 | n8n orchestration | Coordinate asynchronous and multi-step workflows, such as requesting AI interpretation, waiting for backend state, and initiating retryable follow-up. It passes correlation identifiers and calls backend-owned commands; it does not become the source of truth or decide policy. |
 | Replaceable AI-provider adapter | Present a stable application interface for structured summary, category suggestion, missing-information list, and confidence. It validates provider output and isolates provider-specific payloads, credentials, timeouts, and errors. AI output remains advisory. |
 | Replaceable outbound-integration adapters | Present stable commands and result types for outbound actions. The proposed MVP adapter is a clearly labeled mock email provider that records simulated success or failure and sends no real email. Future real adapters must not change approval rules. |
-| Audit/event logging | Capture important domain transitions, human decisions, errors, retries, and integration attempts with correlation, actor, time, outcome, and sanitized context. Audit writes persist to Postgres and must not depend solely on n8n execution history or application console logs. |
+| Audit/event logging | Capture important domain transitions, human decisions, errors, retries, and integration attempts with correlation, actor, time, outcome, and sanitized context. Canonical audit writes persist to Postgres. Separate PII-minimized integration events are proposed for at-least-once delivery through a future transactional outbox; neither depends on n8n execution history or console logs. |
 
 ## Why deterministic decisions stay in backend code
 
@@ -67,6 +69,7 @@ Prompts and n8n workflows may collect evidence or coordinate steps, but they mus
 - Postgres is the canonical source for operational state; n8n execution data is supporting telemetry only.
 - Authorized FastAPI commands exclusively control canonical lifecycle transitions. Important backend-controlled state changes and their audit events commit transactionally.
 - Important event history is append-oriented. Corrections create new events rather than rewriting the historical record.
+- Canonical audit events and integration delivery messages are separate records. State, audit evidence, and future outbox messages must commit together.
 - Audit records distinguish human actors, backend services, n8n workflows, and external or mock providers.
 - Sensitive data is minimized and sanitized before logging or sending to an AI provider.
 - The future detailed design must define retention, access controls, transactional boundaries, event schemas, and recovery behavior before implementation.
