@@ -17,11 +17,11 @@ The MVP will demonstrate a controlled operating flow in which AI helps interpret
 | User | Responsibilities |
 | --- | --- |
 | Customer | Submit a service request, provide requested details, and receive an approved response or scheduling invitation. |
-| Operations agent | Monitor queues, investigate incomplete or ambiguous requests, resolve likely duplicates, prepare or review proposed actions, retry failed work, and submit customer-facing actions for approval. |
-| Manager/approver | Review urgent or exceptional cases and approve or reject proposed customer-facing actions. |
-| Administrator | Configure categories, confidence thresholds, routing rules, adapters, access, and operational settings; investigate audit and integration records. |
+| Operations agent (`OperationsAgent`) | Monitor queues, investigate incomplete or ambiguous requests, resolve likely duplicates, prepare or review proposed actions, retry failed work, and submit customer-facing actions for approval. |
+| Manager/approver (`ManagerApprover`) | Review urgent or exceptional cases and approve or reject proposed customer-facing actions. |
+| Administrator (`Administrator`) | Configure categories, confidence thresholds, routing rules, adapters, access, and operational settings; investigate audit and integration records. |
 
-An authorized operations agent may approve routine outbound actions if access policy permits it. Manager approval is expected for urgent or escalated cases. Exact permissions will be defined before implementation.
+Operations agents cannot approve or reject customer-facing actions. A `ManagerApprover` or `Administrator` must decide the exact proposal, and the approver cannot be a creator or material reviser of that proposal. Urgent review also requires manager or administrator authority. The fixed MVP policy is defined in [authentication and authorization](authentication-and-authorization.md).
 
 ## Primary request lifecycle
 
@@ -36,7 +36,7 @@ The product has one primary operational lifecycle:
 7. The request enters the appropriate operational queue.
 8. Urgent, ambiguous, incomplete, low-confidence, or possible-duplicate cases wait for human review.
 9. The system prepares a proposed customer response and scheduling invitation.
-10. An authorized operator approves or rejects the proposed action.
+10. A distinct authorized `ManagerApprover` or `Administrator` approves or rejects the exact proposal; the decision-maker cannot be its creator or a material reviser.
 11. Approval invokes a clearly labeled mock email provider; rejection records the decision and prevents the outbound attempt.
 12. The system records important events, approvals, errors, retries, and integration attempts.
 13. An operations dashboard exposes status, priority, routing, approvals, failures, and audit history.

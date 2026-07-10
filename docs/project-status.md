@@ -4,7 +4,7 @@
 
 **Phase 1 — Technical Design and Engineering Foundation: underway.**
 
-Phase 0 product definition is complete. The domain model, lifecycle state machines, queue behavior, canonical-state boundaries, and implementation-neutral API/event contracts are now defined. Application implementation has not started.
+Phase 0 product definition is complete. The domain model, lifecycle state machines, queue behavior, canonical-state boundaries, API/event contracts, and fixed authentication/permission model are now defined. Application implementation has not started.
 
 ## Completed work
 
@@ -15,14 +15,16 @@ Phase 0 product definition is complete. The domain model, lifecycle state machin
 - Aligned every permitted material proposal revision with an atomic parent-request transition so no request remains executable, awaiting approval, or retryable for a superseded proposal.
 - Defined `/api/v1` command/query boundaries, intake outcomes, expected-version and error semantics, command idempotency, guarded n8n callbacks, and read models in the [API contracts](api-contracts.md).
 - Defined PII-minimized event envelopes, at-least-once delivery, aggregate-version ordering, consumer deduplication, transactional-outbox compatibility, and n8n authority limits in the [event contracts](event-contracts.md).
+- Defined Supabase human authentication, fixed human/machine roles, HMAC workflow authentication, attempt-scoped callbacks, separation of duties, all endpoint permissions, field access, auth errors, and security auditing in [authentication and authorization](authentication-and-authorization.md).
 - Mapped all 12 approved demo scenarios to starting states, commands, guards, final states, queues, audit evidence, and outbound-attempt expectations.
 - Accepted [ADR 0001](decisions/0001-canonical-state-and-lifecycle-boundaries.md) for canonical state and lifecycle boundaries.
 - Accepted [ADR 0002](decisions/0002-api-command-and-event-boundaries.md) for HTTP commands, events, and orchestration boundaries.
+- Accepted [ADR 0003](decisions/0003-authentication-and-role-permissions.md) for identity, machine authentication, fixed roles, and self-approval prevention.
 - Preserved the requirement that the outbound provider is mock-only and sends no real email.
 
 ## Active task
 
-None. The API and event contract design task is complete; the next focused Phase 1 task has not started.
+None. The authentication and role-permission design task is complete; the next focused Phase 1 task has not started.
 
 ## Blockers
 
@@ -46,13 +48,17 @@ None known for the completed design task. Implementation should not begin until 
 - Mutable commands carry expected aggregate versions; stale versions return `409 CONCURRENCY_CONFLICT`, and business guards return specific stable `409` codes.
 - Integration events use at-least-once delivery with UUID event deduplication and aggregate-version ordering; audit events remain separate canonical evidence.
 - n8n can request guarded commands and report evidence only for backend-created attempts; it cannot submit authoritative lifecycle decisions.
+- Human authentication uses Supabase Auth tokens validated by FastAPI, while application-controlled Postgres roles are loaded for every protected request.
+- Fixed human roles are `OperationsAgent`, `ManagerApprover`, and `Administrator`; fixed machine identities are `BackendService`, `WorkflowService`, and `EventPublisher`.
+- WorkflowService uses HMAC-SHA256 request authentication, and result callbacks also require an opaque credential scoped to one backend-created attempt.
+- Operations agents cannot approve/reject or complete Urgent review; no manager or administrator may approve/reject a proposal they created or materially revised.
 
 ## Technical debt and deferred design
 
 The following focused decisions remain before implementation:
 
 - Exact OpenAPI component schemas, field constraints, generated examples, and contract-test fixtures
-- Exact role-permission matrix and MVP authentication approach
+- Supabase project/token configuration, authentication libraries, controlled demo-user setup, and security contract tests
 - Database schema, constraints, indexes, transaction patterns, retention, and archival behavior
 - Exact deterministic priority/routing criteria, duplicate-detection policy, confidence threshold, and operator-override policy
 - Audit event schemas, redaction rules, access controls, and retention policy
@@ -65,12 +71,12 @@ The following focused decisions remain before implementation:
 ## Known limitations
 
 - The repository contains documentation only; no frontend, backend, database, workflow, integration, automated test, or deployment exists.
-- API and event contracts are implementation-neutral and do not yet specify final field constraints, authentication, transport, or database enforcement.
-- Exact numeric thresholds, retry counts, scoring formulas, and permission mappings remain intentionally undefined.
+- API, event, and security contracts are implementation-neutral and do not yet specify final field constraints, libraries, Supabase project settings, secret storage, transport, or database enforcement.
+- Exact numeric thresholds, retry counts, and scoring formulas remain intentionally undefined.
 - No real email is sent; only a proposed mock adapter is approved for the MVP.
 - The design targets one demonstration organization, one primary intake path, and modest operational scale.
 - Billing, payments, multi-tenancy, mobile apps, full CRM behavior, autonomous communication, large-scale analytics, numerous real integrations, enterprise authentication, microservices, and Kubernetes remain outside scope.
 
 ## Next milestone
 
-**Phase 1 focused design — role permissions and persistence constraints.** Define the actor/permission matrix, authentication and service-identity assumptions, Postgres schema constraints, command-idempotency records, transaction patterns, and transactional-outbox persistence before scaffolding application code.
+**Phase 1 focused design — persistence constraints.** Define Postgres schemas and constraints for actors/roles, proposal attribution, nonce replay protection, command idempotency, callback credential hashes, lifecycle aggregates, audit evidence, transaction patterns, and transactional-outbox persistence before scaffolding application code.

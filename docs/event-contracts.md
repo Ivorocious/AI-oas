@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines implementation-neutral integration-event delivery and n8n boundaries for the MVP. It complements the [API contracts](api-contracts.md), [domain model](domain-model.md), [state machines](state-machines.md), and [ADR 0002](decisions/0002-api-command-and-event-boundaries.md). No message broker, transactional outbox, webhook publisher, n8n workflow, callback authentication, or event consumer has been implemented.
+This document defines implementation-neutral integration-event delivery and n8n boundaries for the MVP. It complements the [API contracts](api-contracts.md), [domain model](domain-model.md), [state machines](state-machines.md), [authentication and authorization model](authentication-and-authorization.md), and ADRs [0002](decisions/0002-api-command-and-event-boundaries.md) and [0003](decisions/0003-authentication-and-role-permissions.md). No message broker, transactional outbox, webhook publisher, n8n workflow, callback authentication, or event consumer has been implemented.
 
 ## Record types and authority
 
@@ -51,7 +51,7 @@ An audit event and an integration event may share correlation, causation, aggreg
 - `occurred_at` is the UTC time of the canonical change, not a later publish attempt time.
 - `correlation_id` groups one user or workflow operation. `causation_id` identifies the command, prior event, or attempt that directly caused this event.
 - `aggregate.version` is the resulting canonical version and the only ordering signal guaranteed to consumers.
-- `actor.type` is one of `Customer`, `OperationsUser`, `Approver`, `Administrator`, `BackendService`, or `WorkflowService`. Actor IDs are internal UUIDs, not names or email addresses.
+- `actor.type` is one of `Customer`, `OperationsAgent`, `ManagerApprover`, `Administrator`, `BackendService`, `WorkflowService`, or `EventPublisher`. Actor IDs are internal UUIDs, not names or email addresses. `Customer` represents a backend-generated non-login reference for `PublicCustomer` intake, not a trusted customer-supplied identity.
 - `audit_event_id` links to canonical evidence when authorization permits; the integration event remains a distinct message.
 - `data` contains identifiers, stable enum values, version references, and minimal transition facts only.
 
@@ -144,6 +144,8 @@ Event names are proposed integration contracts. Existing audit names remain cano
 
 n8n is an orchestrator and event consumer, not an authority. It may react to at-least-once events and request backend commands, but duplicate workflow executions must be safe.
 
+n8n authenticates as `WorkflowService` using the approved HMAC headers. Claim/start commands require exact backend-created attempt assignment, and result callbacks require both HMAC authentication and the additional attempt-scoped callback credential. AI and mock-email providers never call FastAPI directly as canonical actors.
+
 ```mermaid
 sequenceDiagram
     participant API as FastAPI command boundary
@@ -185,9 +187,11 @@ sequenceDiagram
 - Treat workflow execution history as canonical audit evidence.
 - Retry a callback or side effect with a new identity to bypass a conflict.
 
+`EventPublisher` is a separate machine identity. It can claim outbox work and record publication-attempt metadata but cannot invoke lifecycle commands, query unrestricted domain records, or act as n8n.
+
 ### Attempt-scoped callback contract
 
-When the backend creates an attempt, it returns the attempt ID and an opaque, attempt-scoped callback authorization context to the trusted workflow actor. The exact authentication mechanism is deferred, but it must bind the caller to that attempt and operation kind. The credential is never placed in an integration event, audit metadata, provider payload, or workflow log.
+When the backend creates an attempt, it returns the attempt ID and an opaque, attempt-scoped callback credential to the trusted workflow context. The credential is bound to that attempt and operation kind, stored by the backend only as a cryptographic hash, and used only with valid `WorkflowService` HMAC authentication as defined in [authentication and authorization](authentication-and-authorization.md#attempt-scoped-callback-authorization). It is never placed in an integration event, audit metadata, provider payload, or workflow log.
 
 Callback bodies use an allowlisted evidence union:
 

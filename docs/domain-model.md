@@ -207,8 +207,8 @@ Decisions are immutable and versioned. Inputs should use hashes or minimal snaps
 
 | Requirement | Important fields |
 | --- | --- |
-| Required | `id`, `ServiceRequest` ID, `proposal_series_id`, proposal version, `logical_operation_id`, action type, destination reference, content/payload snapshot and digest, state, created timestamp, optimistic `version` |
-| Optional | Scheduling details, creator actor, supersedes/superseded-by proposal ID, current valid approval ID, execution outcome summary, terminal timestamp |
+| Required | `id`, `ServiceRequest` ID, `proposal_series_id`, proposal version, `logical_operation_id`, action type, destination reference, content/payload snapshot and digest, state, creator actor UUID, approval-excluded actor UUIDs, created timestamp, optimistic `version` |
+| Optional | Scheduling details, material-editor attribution, supersedes/superseded-by proposal ID, current valid approval ID, execution outcome summary, terminal timestamp |
 
 ### Relationships and behavior
 
@@ -219,6 +219,7 @@ Decisions are immutable and versioned. Inputs should use hashes or minimal snaps
 - The parent request's active-proposal reference moves to the replacement. Any execution recovery target is cleared, and no decision transfers to the replacement.
 - A prior approval and all failed attempts remain immutable historical evidence but cannot authorize the replacement proposal.
 - `Executed` and `TerminalExecutionFailure` proposals cannot be reopened by an ordinary revision command. Terminal recovery would require a separately approved future design.
+- Creator and material-editor attribution is append-oriented while a draft changes. Submission freezes the actor UUIDs excluded from approving/rejecting that exact payload; display names and later role changes never alter the guard.
 
 ### History, sensitivity, and authority
 
@@ -240,7 +241,7 @@ Submitted proposal snapshots are immutable; revisions create versions. A draft m
 ### Relationships and behavior
 
 - A proposal submission can receive one effective decision. Duplicate commands return the existing result or conflict rather than creating contradictory decisions.
-- Approval validity requires an authorized actor, an unchanged exact proposal version/digest, an executable action state, and no superseding proposal.
+- Approval validity requires an authorized `ManagerApprover` or `Administrator` whose actor UUID is not excluded by proposal attribution, an unchanged exact proposal version/digest, an executable action state, and no superseding proposal.
 - A new material proposal version makes the prior approval ineffective for future execution, as evidenced by proposal state and a new audit event; it never deletes or edits the historical decision.
 
 ### History, sensitivity, and authority
