@@ -2,61 +2,66 @@
 
 ## Current phase
 
-**Phase 0 — Product Definition: complete.**
+**Phase 1 — Technical Design and Engineering Foundation: underway.**
 
-The required source-of-truth documents are present and internally aligned: the [product brief](product-brief.md), [proposed architecture](architecture.md), and repository [README](../README.md). Completion means the product direction is documented; it does not mean application implementation has started.
+Phase 0 product definition is complete. The domain model, lifecycle state machines, queue behavior, invariants, and canonical-state boundaries required for this Phase 1 task are now defined. Application implementation has not started.
 
 ## Completed work
 
-- Defined the business problem, product scope, users, responsibilities, and one primary operational lifecycle.
-- Defined initial categories, priorities, queues, human-approval rules, MVP capabilities, non-goals, success criteria, assumptions, and risks.
-- Defined 12 initial demo scenarios covering normal, exceptional, approval, idempotency, and retry behavior.
-- Recorded the proposed component architecture and the separation between AI interpretation, backend policy, n8n orchestration, persistence, adapters, and audit logging.
-- Established that the first outbound integration is a mock email provider that sends no real email.
+- Defined the Phase 0 business problem, scope, users, lifecycle, approval rules, non-goals, success criteria, risks, and 12 demo scenarios in the [product brief](product-brief.md).
+- Recorded the proposed component responsibilities in the [architecture](architecture.md).
+- Defined all required records, ownership boundaries, relationships, sensitive-data considerations, authorities, versioning expectations, and transaction boundaries in the [domain model](domain-model.md).
+- Defined inbound-delivery, service-request, proposed-action, and integration-attempt lifecycle states, guards, authorities, audit events, failures, queues, invariants, and recovery behavior in the [state-machine design](state-machines.md).
+- Mapped all 12 approved demo scenarios to starting states, commands, guards, final states, queues, audit evidence, and outbound-attempt expectations.
+- Accepted [ADR 0001](decisions/0001-canonical-state-and-lifecycle-boundaries.md) for canonical state and lifecycle boundaries.
+- Preserved the requirement that the outbound provider is mock-only and sends no real email.
 
 ## Active task
 
-None. Phase 0 is closed, and Phase 1 has not started.
+None. The domain-model and lifecycle-state-machine design task is complete; the next focused Phase 1 task has not started.
 
 ## Blockers
 
-None known for Phase 0. Later implementation will require explicit technical design decisions before code is scaffolded.
+None known for the completed design task. Implementation should not begin until the focused contract, permissions, persistence, and test-design decisions listed below are completed.
 
 ## Approved decisions
 
-- The product is an AI Operations Automation Suite for a general service business and must remain adaptable across service industries.
-- Customer, operations agent, manager/approver, and administrator are the primary roles.
-- The lifecycle and human-review triggers defined in the product brief are the MVP source of truth.
-- AI is limited to structured interpretation: summary, category suggestion, missing-information detection, and confidence.
-- Deterministic backend code owns final priority, routing, approval requirements, authorization, idempotency, retry eligibility, and state transitions.
-- The proposed stack is Next.js/TypeScript, FastAPI/Python, Supabase Postgres, and n8n, with replaceable AI and outbound adapters plus audit/event logging.
-- Supabase Postgres is proposed as the canonical operational store; n8n coordinates work but does not own business state or policy.
-- Every customer-facing response or scheduling invitation requires human approval.
-- The first outbound provider is mock-only, simulates success or failure, records attempts, and never sends real email.
-- The MVP is a modular application; microservices and Kubernetes are out of scope without demonstrated need.
+- Supabase Postgres is the proposed canonical operational store.
+- Authorized FastAPI backend commands exclusively control canonical lifecycle transitions; the frontend, n8n, AI providers, and outbound adapters provide intent or evidence only.
+- Invalid deliveries remain separate inspectable `InboundDelivery` records and do not become normal `ServiceRequest` records.
+- Request status, priority, operational queue, proposed-action state, approval, and integration-attempt state are separate concepts.
+- AI interpretations and deterministic routing decisions are immutable, versioned evidence with applicable prompt, schema, provider, and rule references.
+- Approval binds to one exact proposed-action ID, version, and payload digest; material revision requires a new version and approval.
+- Intake and outbound idempotency have independent identities and guards.
+- Retrying outbound work creates a new attempt for the same logical operation; a successful logical operation cannot execute again.
+- Important backend-controlled state transitions and audit events are transactionally consistent and append-oriented.
+- Mutable aggregates use optimistic version checks or equivalent atomic conflict protection.
+- Domain IDs use UUIDs, timestamps use UTC, and operational/audit records are not hard-deleted in the MVP.
 
-## Technical debt
+## Technical debt and deferred design
 
-No application technical debt exists because implementation has not started. The following design debt is intentionally deferred to the next milestone:
+The following focused decisions remain before implementation:
 
-- Detailed domain model, state machine, database schema, indexes, and retention policy
-- API and webhook contracts, idempotency-key scope, and error taxonomy
-- Exact priority, routing, duplicate-candidate, confidence-threshold, and retry configuration
-- Role-permission matrix and MVP authentication approach
-- Audit event schema, redaction rules, and transactional guarantees
-- n8n workflow contracts and backend callback security
-- Adapter interfaces, timeout policy, and provider test strategy
+- API command, query, webhook, and event contracts, including error and concurrency responses
+- Exact role-permission matrix and MVP authentication approach
+- Database schema, constraints, indexes, transaction patterns, retention, and archival behavior
+- Exact deterministic priority/routing criteria, duplicate-detection policy, confidence threshold, and operator-override policy
+- Audit event schemas, redaction rules, access controls, and retention policy
+- Failure taxonomy, retry limits/backoff, and uncertain-outcome reconciliation
+- n8n workflow contracts, correlation behavior, and backend callback security
+- AI and outbound adapter interfaces, timeouts, validation, and contract-test strategy
+- Test architecture and executable scenario fixtures for every invariant and demo path
 - Deployment, environment, observability, and recovery design
 
 ## Known limitations
 
-- The repository contains documentation only; no frontend, backend, database, workflow, integration, tests, or deployment exists.
-- The architecture is conceptual and may change through recorded design decisions before implementation.
-- No real email is sent; only a mock adapter is approved for the MVP.
-- Exact business-rule values and permission details are not yet specified.
-- The MVP targets a single demonstration organization, one primary intake path, and modest operational scale.
-- Billing, payments, multi-tenancy, mobile apps, full CRM behavior, autonomous communication, large-scale analytics, numerous real integrations, enterprise authentication, microservices, and Kubernetes are outside scope.
+- The repository contains documentation only; no frontend, backend, database, workflow, integration, automated test, or deployment exists.
+- State machines are implementation-neutral and do not yet specify API payloads or database constraints.
+- Exact numeric thresholds, retry counts, scoring formulas, and permission mappings remain intentionally undefined.
+- No real email is sent; only a proposed mock adapter is approved for the MVP.
+- The design targets one demonstration organization, one primary intake path, and modest operational scale.
+- Billing, payments, multi-tenancy, mobile apps, full CRM behavior, autonomous communication, large-scale analytics, numerous real integrations, enterprise authentication, microservices, and Kubernetes remain outside scope.
 
 ## Next milestone
 
-**Phase 1 — Technical design and implementation foundation.** Define the domain model and state machine, API and event contracts, role-permission matrix, deterministic rule configuration, adapter interfaces, audit schema, and test strategy. Record consequential choices as architecture decisions before scaffolding the minimum application foundation.
+**Phase 1 focused design — API and event contracts.** Define implementation-neutral backend commands, queries, webhook responses, domain-event envelopes, concurrency/idempotency error semantics, and n8n callback boundaries against the approved state machines. Follow with the role-permission matrix and persistence design before scaffolding application code.

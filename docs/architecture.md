@@ -2,7 +2,7 @@
 
 ## Status and intent
 
-This document describes a proposed conceptual architecture for the AI Operations Automation Suite MVP. None of these application components has been implemented. The design supports the approved [product brief](product-brief.md) while keeping business policy testable, integrations replaceable, and important actions auditable.
+This document describes a proposed conceptual architecture for the AI Operations Automation Suite MVP. None of these application components has been implemented. The design supports the approved [product brief](product-brief.md), [domain model](domain-model.md), [lifecycle state machines](state-machines.md), and [canonical-state decision](decisions/0001-canonical-state-and-lifecycle-boundaries.md) while keeping business policy testable, integrations replaceable, and important actions auditable.
 
 ## Component view
 
@@ -65,6 +65,7 @@ Prompts and n8n workflows may collect evidence or coordinate steps, but they mus
 ## Data and audit principles
 
 - Postgres is the canonical source for operational state; n8n execution data is supporting telemetry only.
+- Authorized FastAPI commands exclusively control canonical lifecycle transitions. Important backend-controlled state changes and their audit events commit transactionally.
 - Important event history is append-oriented. Corrections create new events rather than rewriting the historical record.
 - Audit records distinguish human actors, backend services, n8n workflows, and external or mock providers.
 - Sensitive data is minimized and sanitized before logging or sending to an AI provider.
@@ -72,4 +73,4 @@ Prompts and n8n workflows may collect evidence or coordinate steps, but they mus
 
 ## Deployment note
 
-No deployment topology is approved in Phase 0. Docker, hosting, continuous delivery, observability vendors, and environment strategy belong to a later technical-design milestone. Microservices and Kubernetes are explicit MVP non-goals.
+No deployment topology is approved through the current Phase 1 design work. Docker, hosting, continuous delivery, observability vendors, and environment strategy belong to a later focused milestone. Microservices and Kubernetes are explicit MVP non-goals.
