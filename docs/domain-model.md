@@ -214,11 +214,14 @@ Decisions are immutable and versioned. Inputs should use hashes or minimal snaps
 - One service request can have multiple proposal families and versions, but only an explicitly active version advances toward execution.
 - An `ApprovalDecision` binds to this record's ID, version, and payload digest.
 - `IntegrationAttempt` records share its `logical_operation_id` and exact approved proposal version.
-- Materially changing any pending or approved proposal creates a new version, supersedes the earlier version, and requires a new approval. The earlier decision remains historical but is no longer valid for execution.
+- Materially changing a `PendingApproval`, `Approved`, or `RetryableExecutionFailure` proposal creates a replacement `Draft`, supersedes the earlier version, and atomically moves the parent request to `ActionRevisionRequired` in `Human review`.
+- The parent request's active-proposal reference moves to the replacement. Any execution recovery target is cleared, and no decision transfers to the replacement.
+- A prior approval and all failed attempts remain immutable historical evidence but cannot authorize the replacement proposal.
+- `Executed` and `TerminalExecutionFailure` proposals cannot be reopened by an ordinary revision command. Terminal recovery would require a separately approved future design.
 
 ### History, sensitivity, and authority
 
-Submitted proposal snapshots are immutable; revisions create versions. A draft may be edited under optimistic concurrency without changing lifecycle state, but submission freezes its version and digest. Content and destination are sensitive customer communication data. Authorized operator commands create or submit drafts; authorized approvers decide; only backend execution commands advance execution state.
+Submitted proposal snapshots are immutable; revisions create versions. A draft may be edited under optimistic concurrency without changing lifecycle state, but submission freezes its version and digest. Resubmitting a replacement requires the active proposal to be `Draft`, advances it to `PendingApproval`, moves the request to `AwaitingApproval`, and requires a new decision. Content and destination are sensitive customer communication data. Authorized operator commands create or submit drafts; authorized approvers decide; only backend execution commands advance execution state.
 
 ## `ApprovalDecision`
 
@@ -296,6 +299,7 @@ Audit events are append-only and not hard-deleted in the MVP. They store identif
 - Intake acceptance atomically finalizes the new `InboundDelivery`, creates the initial `ServiceRequest` when valid and new, and writes audit events. Contact creation or association participates when the selected persistence design can preserve the same invariant.
 - A service-request command atomically checks its optimistic version, changes request state and current routing/queue references, and appends audit evidence.
 - Approval atomically creates the immutable decision, advances the exact proposal, updates the service-request summary where applicable, and appends audit evidence.
+- Material revision atomically checks request and proposal versions, authority, proposal family, approval state, and attempt history; supersedes the old proposal; creates and activates the replacement draft; moves the request to `ActionRevisionRequired` and `Human review`; clears obsolete execution recovery data; and appends audit evidence. Any prior approval or attempt remains unchanged. If any guard or write fails, the entire revision rolls back.
 - Attempt creation atomically verifies operation-specific input/version guards and creates one pending attempt with audit evidence. Outbound creation additionally verifies exact approval and side-effect idempotency and advances the proposal summary.
 - Attempt result handling atomically terminalizes the attempt and appends audit evidence. AI success creates the immutable interpretation; outbound results update proposal and service-request summaries.
 

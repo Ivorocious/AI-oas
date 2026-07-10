@@ -12,6 +12,7 @@ Phase 0 product definition is complete. The domain model, lifecycle state machin
 - Recorded the proposed component responsibilities in the [architecture](architecture.md).
 - Defined all required records, ownership boundaries, relationships, sensitive-data considerations, authorities, versioning expectations, and transaction boundaries in the [domain model](domain-model.md).
 - Defined inbound-delivery, service-request, proposed-action, and integration-attempt lifecycle states, guards, authorities, audit events, failures, queues, invariants, and recovery behavior in the [state-machine design](state-machines.md).
+- Aligned every permitted material proposal revision with an atomic parent-request transition so no request remains executable, awaiting approval, or retryable for a superseded proposal.
 - Mapped all 12 approved demo scenarios to starting states, commands, guards, final states, queues, audit evidence, and outbound-attempt expectations.
 - Accepted [ADR 0001](decisions/0001-canonical-state-and-lifecycle-boundaries.md) for canonical state and lifecycle boundaries.
 - Preserved the requirement that the outbound provider is mock-only and sends no real email.
@@ -32,6 +33,7 @@ None known for the completed design task. Implementation should not begin until 
 - Request status, priority, operational queue, proposed-action state, approval, and integration-attempt state are separate concepts.
 - AI interpretations and deterministic routing decisions are immutable, versioned evidence with applicable prompt, schema, provider, and rule references.
 - Approval binds to one exact proposed-action ID, version, and payload digest; material revision requires a new version and approval.
+- Material revision atomically activates a replacement draft, moves the request to `ActionRevisionRequired` in `Human review`, clears obsolete execution recovery state, and preserves prior approvals and attempts as historical evidence without letting them authorize the replacement.
 - Intake and outbound idempotency have independent identities and guards.
 - Retrying outbound work creates a new attempt for the same logical operation; a successful logical operation cannot execute again.
 - Important backend-controlled state transitions and audit events are transactionally consistent and append-oriented.
