@@ -2,9 +2,9 @@
 
 ## Status and scope
 
-This document defines the approved, implementation-neutral domain model for the MVP. It refines the [product brief](product-brief.md), [proposed architecture](architecture.md), and [lifecycle state machines](state-machines.md). No database schema, ORM model, API, or application component has been implemented.
+This document defines the approved, implementation-neutral domain model for the MVP. It refines the [product brief](product-brief.md), [proposed architecture](architecture.md), and [lifecycle state machines](state-machines.md); the proposed relational representation is defined separately in the [persistence design](persistence-design.md). No database schema, migration, ORM model, API, or application component has been implemented.
 
-All approved concept names are retained. The model introduces no additional business entity; `proposal_series_id` and `logical_operation_id` are correlation identifiers used to preserve proposal and outbound-operation identity across versions and retries.
+All approved concept names are retained. The model introduces no additional business entity; `proposal_series_id` preserves proposal identity across versions, while the persistence design gives `logical_operation_id` a durable support record so attempt and outbound-idempotency invariants can be enforced across retries.
 
 ## Model-wide conventions
 

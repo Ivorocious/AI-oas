@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines implementation-neutral HTTP contracts for the MVP. It applies the approved [domain model](domain-model.md), [lifecycle state machines](state-machines.md), [event contracts](event-contracts.md), [authentication and authorization model](authentication-and-authorization.md), and ADRs [0002](decisions/0002-api-command-and-event-boundaries.md) and [0003](decisions/0003-authentication-and-role-permissions.md). No API, route, authentication middleware, database schema, or workflow has been implemented.
+This document defines implementation-neutral HTTP contracts for the MVP. It applies the approved [domain model](domain-model.md), [lifecycle state machines](state-machines.md), [event contracts](event-contracts.md), [authentication and authorization model](authentication-and-authorization.md), [persistence design](persistence-design.md), and ADRs [0002](decisions/0002-api-command-and-event-boundaries.md), [0003](decisions/0003-authentication-and-role-permissions.md), and [0004](decisions/0004-postgres-persistence-and-transactional-outbox.md). No API, route, authentication middleware, database schema/migration, or workflow has been implemented.
 
 The proposed prefix is `/api/v1`. Commands may change canonical state; queries are read-only. FastAPI is the only authoritative command boundary. The frontend and n8n call these contracts and never write canonical database state directly.
 
@@ -264,4 +264,4 @@ Every business guard failure uses `409` and the most specific code. A command ne
 - `/api/v1` changes remain backward compatible. Additive optional fields are allowed; removing fields, changing meaning, or changing stable enum values requires a new API version.
 - Body and event `schema_version` values evolve independently from the URL version.
 - Clients ignore unknown additive response fields but reject unknown command enum values they intend to send.
-- Exact authentication libraries/configuration, payload length limits, retry timing, and database constraints remain deferred; those choices cannot weaken these guards, the permission matrix, or error semantics.
+- Exact authentication libraries/configuration, payload length limits, retry timing, and physical SQL/migration details remain deferred; those choices cannot weaken these guards, the permission matrix, the proposed persistence constraints, or error semantics.

@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines implementation-neutral integration-event delivery and n8n boundaries for the MVP. It complements the [API contracts](api-contracts.md), [domain model](domain-model.md), [state machines](state-machines.md), [authentication and authorization model](authentication-and-authorization.md), and ADRs [0002](decisions/0002-api-command-and-event-boundaries.md) and [0003](decisions/0003-authentication-and-role-permissions.md). No message broker, transactional outbox, webhook publisher, n8n workflow, callback authentication, or event consumer has been implemented.
+This document defines implementation-neutral integration-event delivery and n8n boundaries for the MVP. It complements the [API contracts](api-contracts.md), [domain model](domain-model.md), [state machines](state-machines.md), [authentication and authorization model](authentication-and-authorization.md), [persistence design](persistence-design.md), and ADRs [0002](decisions/0002-api-command-and-event-boundaries.md), [0003](decisions/0003-authentication-and-role-permissions.md), and [0004](decisions/0004-postgres-persistence-and-transactional-outbox.md). No message broker, transactional outbox, webhook publisher, n8n workflow, callback authentication, or event consumer has been implemented.
 
 ## Record types and authority
 
@@ -65,7 +65,7 @@ Consumers needing authorized detail call a query endpoint using the resource ID.
 
 ### Transaction boundary
 
-A future implementation must be transactional-outbox compatible:
+The proposed persistence implementation must follow the transactional-outbox pattern:
 
 1. The backend validates the command and expected versions.
 2. In one database transaction it changes canonical state, appends required `AuditEvent` records, and inserts immutable outbox messages with final `event_id` and aggregate version.

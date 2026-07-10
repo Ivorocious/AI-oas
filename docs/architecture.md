@@ -2,7 +2,7 @@
 
 ## Status and intent
 
-This document describes a proposed conceptual architecture for the AI Operations Automation Suite MVP. None of these application components has been implemented. The design supports the approved [product brief](product-brief.md), [domain model](domain-model.md), [lifecycle state machines](state-machines.md), [API contracts](api-contracts.md), [event/n8n contracts](event-contracts.md), [authentication and authorization](authentication-and-authorization.md), and architecture decisions [0001](decisions/0001-canonical-state-and-lifecycle-boundaries.md), [0002](decisions/0002-api-command-and-event-boundaries.md), and [0003](decisions/0003-authentication-and-role-permissions.md) while keeping business policy testable, integrations replaceable, and important actions auditable.
+This document describes a proposed conceptual architecture for the AI Operations Automation Suite MVP. None of these application components has been implemented. The design supports the approved [product brief](product-brief.md), [domain model](domain-model.md), [lifecycle state machines](state-machines.md), [API contracts](api-contracts.md), [event/n8n contracts](event-contracts.md), [authentication and authorization](authentication-and-authorization.md), [persistence design](persistence-design.md), and architecture decisions [0001](decisions/0001-canonical-state-and-lifecycle-boundaries.md), [0002](decisions/0002-api-command-and-event-boundaries.md), [0003](decisions/0003-authentication-and-role-permissions.md), and [0004](decisions/0004-postgres-persistence-and-transactional-outbox.md) while keeping business policy testable, integrations replaceable, and important actions auditable.
 
 ## Component view
 
@@ -20,7 +20,7 @@ flowchart LR
     O --> M["Mock email provider only"]
     B --> E["Audit and event logging"]
     E --> D
-    B --> X["Integration events / future outbox"]
+    B --> X["Integration events / transactional outbox"]
     X --> D
     X -.->|at-least-once delivery| N
 ```
@@ -34,11 +34,11 @@ Arrows show proposed request or event flow, not deployed connections. The backen
 | Next.js/TypeScript frontend | Provide customer intake and operations dashboard experiences; show validation feedback, queue state, priority, routing, proposed actions, approvals, failures, and audit history. It calls backend APIs and does not enforce authoritative business policy. |
 | Supabase Auth | Authenticate human users and issue short-lived access tokens. Application roles remain authoritative in Postgres rather than client-supplied or editable token/body values. |
 | FastAPI/Python backend | Validate human bearer tokens and WorkflowService HMAC/attempt scope; load fixed application roles; enforce endpoint/field permissions, self-approval prohibition, validation, normalization, canonical state transitions, idempotency, duplicate handling, deterministic routing, approval, retry, and audit emission. |
-| Supabase Postgres | Persist normalized requests, contacts or contact references, idempotency records, AI results, duplicate candidates, queue and status state, proposed actions, approvals, integration attempts, and audit events. It is the durable system of record. |
+| Supabase Postgres | Persist canonical aggregates, accepted-intake and command reservations, identity/security metadata, normalized approval attribution, logical operations and attempts, append-oriented audit evidence, and transactional-outbox work. It enforces relational/uniqueness/basic-state constraints and atomic commits, while FastAPI retains business policy. |
 | n8n orchestration | Coordinate asynchronous and multi-step workflows, invoke allowlisted provider adapters for backend-created attempts, and report constrained evidence through backend commands/callbacks. It passes correlation identifiers but does not become the source of truth or decide policy. |
 | Replaceable AI-provider adapter | Present a stable, workflow-invoked interface for structured summary, category suggestion, missing-information list, and confidence. It validates provider output and isolates provider-specific payloads, credentials, timeouts, and errors. AI output remains advisory. |
 | Replaceable outbound-integration adapters | Present stable, workflow-invoked commands and result types for outbound actions. The proposed MVP adapter is a clearly labeled mock email provider that records simulated success or failure and sends no real email. Future real adapters must not change approval rules. |
-| Audit/event logging | Capture important domain transitions, human decisions, errors, retries, and integration attempts with correlation, actor, time, outcome, and sanitized context. Canonical audit writes persist to Postgres. Separate PII-minimized integration events are proposed for at-least-once delivery through a future transactional outbox; neither depends on n8n execution history or console logs. |
+| Audit/event logging | Capture important domain transitions, human decisions, errors, retries, and integration attempts with correlation, actor, time, outcome, and sanitized context. Canonical audit writes persist to Postgres. Separate PII-minimized integration events use the proposed transactional outbox for at-least-once delivery; neither depends on n8n execution history or console logs. |
 
 ## Why deterministic decisions stay in backend code
 
@@ -73,10 +73,10 @@ Prompts and n8n workflows may collect evidence or coordinate steps, but they mus
 - Authorized FastAPI commands exclusively control canonical lifecycle transitions. Important backend-controlled state changes and their audit events commit transactionally.
 - Authentication identifies the caller, centralized permission mapping authorizes the command/query class, and domain guards separately validate the specific transition. No role bypasses the latter.
 - Important event history is append-oriented. Corrections create new events rather than rewriting the historical record.
-- Canonical audit events and integration delivery messages are separate records. State, audit evidence, and future outbox messages must commit together.
+- Canonical audit events and integration delivery messages are separate records. State, audit evidence, and outbox messages must commit together under the [persistence design](persistence-design.md).
 - Audit records distinguish canonical human and service actors while recording external or mock providers only as sanitized evidence metadata, never as API actors.
 - Sensitive data is minimized and sanitized before logging or sending to an AI provider.
-- The future detailed design must define retention, access controls, transactional boundaries, event schemas, and recovery behavior before implementation.
+- Exact migrations, retention durations, database privileges, physical schema details, and recovery operations remain future implementation work; they cannot weaken the approved persistence boundaries.
 
 ## Deployment note
 

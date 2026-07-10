@@ -4,7 +4,7 @@
 
 **Phase 1 — Technical Design and Engineering Foundation: underway.**
 
-Phase 0 product definition is complete. The domain model, lifecycle state machines, queue behavior, canonical-state boundaries, API/event contracts, and fixed authentication/permission model are now defined. Application implementation has not started.
+Phase 0 product definition is complete. The domain model, lifecycle state machines, queue behavior, canonical-state boundaries, API/event contracts, fixed authentication/permission model, and proposed Postgres persistence/outbox design are now defined. Application implementation has not started.
 
 ## Completed work
 
@@ -16,19 +16,21 @@ Phase 0 product definition is complete. The domain model, lifecycle state machin
 - Defined `/api/v1` command/query boundaries, intake outcomes, expected-version and error semantics, command idempotency, guarded n8n callbacks, and read models in the [API contracts](api-contracts.md).
 - Defined PII-minimized event envelopes, at-least-once delivery, aggregate-version ordering, consumer deduplication, transactional-outbox compatibility, and n8n authority limits in the [event contracts](event-contracts.md).
 - Defined Supabase human authentication, fixed human/machine roles, HMAC workflow authentication, attempt-scoped callbacks, separation of duties, all endpoint permissions, field access, auth errors, and security auditing in [authentication and authorization](authentication-and-authorization.md).
+- Defined 23 proposed persistence representations, lifecycle constraints, accepted-intake/command/nonce/callback/outbound idempotency, normalized approval attribution, logical operations/attempts, atomic command patterns, canonical audit storage, transactional outbox publication, retention, migration ordering, and future persistence tests in the [persistence design](persistence-design.md).
 - Mapped all 12 approved demo scenarios to starting states, commands, guards, final states, queues, audit evidence, and outbound-attempt expectations.
 - Accepted [ADR 0001](decisions/0001-canonical-state-and-lifecycle-boundaries.md) for canonical state and lifecycle boundaries.
 - Accepted [ADR 0002](decisions/0002-api-command-and-event-boundaries.md) for HTTP commands, events, and orchestration boundaries.
 - Accepted [ADR 0003](decisions/0003-authentication-and-role-permissions.md) for identity, machine authentication, fixed roles, and self-approval prevention.
+- Accepted [ADR 0004](decisions/0004-postgres-persistence-and-transactional-outbox.md) for canonical Postgres persistence, distinct replay protection, immutable attribution, transactional audit/outbox writes, and at-least-once publication.
 - Preserved the requirement that the outbound provider is mock-only and sends no real email.
 
 ## Active task
 
-None. The authentication and role-permission design task is complete; the next focused Phase 1 task has not started.
+None. The persistence and transactional-outbox design task is complete; the next focused Phase 1 task has not started.
 
 ## Blockers
 
-None known for the completed design task. Implementation should not begin until the focused contract, permissions, persistence, and test-design decisions listed below are completed.
+None known for the completed design task. Implementation should not begin until the remaining field/schema, policy, integration, and test-design decisions listed below are completed.
 
 ## Approved decisions
 
@@ -52,6 +54,10 @@ None known for the completed design task. Implementation should not begin until 
 - Fixed human roles are `OperationsAgent`, `ManagerApprover`, and `Administrator`; fixed machine identities are `BackendService`, `WorkflowService`, and `EventPublisher`.
 - WorkflowService uses HMAC-SHA256 request authentication, and result callbacks also require an opaque credential scoped to one backend-created attempt.
 - Operations agents cannot approve/reject or complete Urgent review; no manager or administrator may approve/reject a proposal they created or materially revised.
+- Accepted public intake has a dedicated reservation record; authenticated commands, machine nonces, callback credentials, and outbound side effects use separate replay/idempotency scopes.
+- Proposal contributors and frozen approval exclusions are normalized immutable records; logical operations own one-way attempts, retries append new rows, and at most one attempt is active or successful.
+- Canonical state, required audit evidence, and immutable outbox messages commit atomically in Postgres; EventPublisher uses leased at-least-once publication and durable one-way attempt history.
+- Postgres enforces structural integrity/uniqueness/basic combinations, while FastAPI retains authorization, lifecycle policy, exact approval, retry eligibility, canonical hashing, redaction, and audit/outbox selection.
 
 ## Technical debt and deferred design
 
@@ -59,11 +65,11 @@ The following focused decisions remain before implementation:
 
 - Exact OpenAPI component schemas, field constraints, generated examples, and contract-test fixtures
 - Supabase project/token configuration, authentication libraries, controlled demo-user setup, and security contract tests
-- Database schema, constraints, indexes, transaction patterns, retention, and archival behavior
+- Exact SQL types/migrations, encryption, canonical hash specifications, database roles, physical indexes, retention durations, archival jobs, backup/restore, and recovery operations
 - Exact deterministic priority/routing criteria, duplicate-detection policy, confidence threshold, and operator-override policy
-- Audit event schemas, redaction rules, access controls, and retention policy
+- Final audit event field schemas, redaction projections, and approved retention durations
 - Failure taxonomy, retry limits/backoff, and uncertain-outcome reconciliation
-- Concrete n8n workflows, event transport, callback authentication, correlation storage, and publisher/dead-letter policy
+- Concrete n8n workflows, event transport, callback implementation, and configured publisher/dead-letter policy
 - AI and outbound adapter interfaces, timeouts, validation, and contract-test strategy
 - Test architecture and executable scenario fixtures for every invariant and demo path
 - Deployment, environment, observability, and recovery design
@@ -71,7 +77,7 @@ The following focused decisions remain before implementation:
 ## Known limitations
 
 - The repository contains documentation only; no frontend, backend, database, workflow, integration, automated test, or deployment exists.
-- API, event, and security contracts are implementation-neutral and do not yet specify final field constraints, libraries, Supabase project settings, secret storage, transport, or database enforcement.
+- API, event, security, and persistence contracts are implementation-neutral and do not yet provide executable SQL, final field lengths/types, libraries, Supabase settings, secret storage, or deployed database enforcement.
 - Exact numeric thresholds, retry counts, and scoring formulas remain intentionally undefined.
 - No real email is sent; only a proposed mock adapter is approved for the MVP.
 - The design targets one demonstration organization, one primary intake path, and modest operational scale.
@@ -79,4 +85,4 @@ The following focused decisions remain before implementation:
 
 ## Next milestone
 
-**Phase 1 focused design — persistence constraints.** Define Postgres schemas and constraints for actors/roles, proposal attribution, nonce replay protection, command idempotency, callback credential hashes, lifecycle aggregates, audit evidence, transaction patterns, and transactional-outbox persistence before scaffolding application code.
+**Phase 1 focused design — deterministic decision and failure policy.** Define priority/routing rule inputs, duplicate-review policy, AI-confidence/missing-information review triggers, retry/uncertain-outcome policy, and operator override boundaries in a separate approved task before application scaffolding.

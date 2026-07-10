@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the fixed MVP identity, authentication, and authorization model for the [API contracts](api-contracts.md), [event/n8n contracts](event-contracts.md), and approved [lifecycle state machines](state-machines.md). It is an accepted technical design under [ADR 0003](decisions/0003-authentication-and-role-permissions.md), not implemented functionality. No Supabase Auth configuration, middleware, role table, seed user, secret, nonce store, callback credential, or application code exists.
+This document defines the fixed MVP identity, authentication, and authorization model for the [API contracts](api-contracts.md), [event/n8n contracts](event-contracts.md), and approved [lifecycle state machines](state-machines.md). It is an accepted technical design under [ADR 0003](decisions/0003-authentication-and-role-permissions.md), with proposed security-record storage in the [persistence design](persistence-design.md). It is not implemented functionality: no Supabase Auth configuration, middleware, role table, seed user, secret, nonce store, callback credential, migration, or application code exists.
 
 The MVP serves one demonstration organization. It uses fixed roles and a centralized permission map rather than editable policies or enterprise RBAC.
 
@@ -273,4 +273,4 @@ Canonical audit and telemetry never store bearer tokens, passwords, HMAC secrets
 
 ## Deferred implementation decisions
 
-The next persistence/security task must define actor/role records, constraints, nonce uniqueness/retention, command permission lookup, proposal attribution storage, callback credential hashes/expiry, machine credential metadata, security-audit event schemas, and outbox access controls. Exact libraries, Supabase project settings, HTTP middleware, secret manager, token lifetimes, and setup instructions remain deferred and cannot weaken this model.
+The persistence design now defines proposed actor/role records, nonce uniqueness/retention, proposal attribution, callback hashes/expiry, machine metadata, audit/outbox storage, and database access boundaries. Exact libraries, SQL migrations, Supabase project settings, HTTP middleware, secret manager, token lifetimes, and setup instructions remain deferred and cannot weaken this model.
