@@ -53,9 +53,9 @@ Prompts and n8n workflows may collect evidence or coordinate steps, but they mus
 3. The backend records duplicate candidates and creates an AI attempt; n8n invokes the replaceable AI adapter for that exact attempt and returns constrained evidence.
 4. The backend validates the structured AI result and executes deterministic priority, routing, and review rules.
 5. n8n coordinates eligible follow-up steps using request and correlation identifiers; durable state changes occur through backend commands.
-6. The backend creates a versioned proposed response or scheduling invitation and records the approval requirement.
+6. The backend creates one proposal series, its durable outbound logical operation, and a versioned proposed response or scheduling invitation. Material revisions remain under that operation and require new exact approval.
 7. An authorized user approves or rejects that exact proposal through the backend.
-8. Only an approved proposal may produce an outbound attempt. n8n invokes the mock outbound adapter for that exact attempt; the mock provider records a simulated result and sends nothing.
+8. Only an approved proposal may produce an outbound attempt. The attempt freezes that exact proposal version/digest, approval, adapter intent, and operation key; n8n invokes the mock adapter for that attempt, and the mock provider records a simulated result and sends nothing.
 9. Each material transition and attempt adds audit evidence. Failures move the request to a recoverable state without erasing earlier events.
 
 ## Adapter and reliability expectations
@@ -65,6 +65,7 @@ Prompts and n8n workflows may collect evidence or coordinate steps, but they mus
 - Each integration attempt should have its own identifier, correlation to the request and approved action, timestamps, outcome, and sanitized error details.
 - Timeouts and transient failures should produce explicit states and bounded, controlled retries.
 - Idempotency must protect intake and side effects independently; a webhook key alone is not sufficient protection for outbound retries.
+- Callback plaintext is issued once and never persisted. If a committed response is lost, the assigned WorkflowService uses a guarded expected-version replacement command that leaves domain state unchanged.
 - A provider replacement must not alter deterministic rules, approval enforcement, or audit requirements.
 
 ## Data and audit principles

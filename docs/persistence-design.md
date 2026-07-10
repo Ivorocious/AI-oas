@@ -29,19 +29,19 @@ In the tables below, “restricted” means operational customer or provider dat
 | `ai_interpretations` | PK `id`. Required: request ID, interpretation number, summary, suggested category, missing-information representation, confidence, input hash, schema/prompt/adapter/provider/model versions, created time. Nullable: safe provider correlation, warnings, latency/usage, superseded-by ID. | Immutable versioned child of a request; optional self-FK and link to the producing logical operation/attempt. | Insert-only except a one-time superseded link if used. Restricted because summaries may repeat customer text; raw provider payloads are excluded. Retain with request decision history. | Unique `(service_request_id, interpretation_number)` and, when applicable, producing successful operation. Index request/current ordering and input/configuration identity. |
 | `duplicate_candidates` | PK `id`. Required: request ID, candidate request/contact reference, evidence version/type, state, created time. Nullable: sanitized score/evidence metadata, resolver actor ID, decision, rationale, resolved time. | Child evidence of the subject request; FKs to candidate request/contact and resolving application actor. | Detection evidence is immutable; resolution fields are write-once. Restricted match evidence; retain with request history. | Prevent self-candidate pairs and duplicate active candidate pairs. Index unresolved candidates by request. Decision/time/resolver must be all null or all present. |
 | `routing_decisions` | PK `id`. Required: request ID, decision number, input snapshot/hash, rule version, category, priority, queue/review outcome, reason codes, created time. Nullable: interpretation ID and duplicate-evidence references. | Immutable versioned child of a request; exact input references explain the current request summary. | Insert-only, restricted operational metadata, retained with lifecycle history. | Unique `(service_request_id, decision_number)`; index request/time and rule version. Referenced interpretation must belong to the same request, enforced directly where possible and transactionally otherwise. |
-| `proposed_actions` | PK `id`. Required: request ID, proposal series ID, proposal version, logical action type, creator actor ID, destination/content snapshot, payload digest, state, created/updated times, `version`. Nullable: scheduling data, supersedes/superseded-by IDs, submitted time, current valid approval ID, execution summary, terminal time. | Proposed-action aggregate root/version; FKs to request, creator, predecessor/successor, and approval. One request owns each series. | Draft fields are expected-version mutable; submission freezes payload/digest; later material changes create a new row. Highly restricted customer-facing content. Historical rows are not hard-deleted. | Unique `(proposal_series_id, proposal_version)`; series/request consistency; at most one active nonterminal proposal per series/request by partial uniqueness; state-dependent frozen/execution checks. |
+| `proposed_actions` | PK `id`. Required: request ID, proposal series ID, proposal version, outbound logical operation ID, logical action type, creator actor ID, destination/content snapshot, payload digest, state, created/updated times, `version`. Nullable: scheduling data, supersedes/superseded-by IDs, submitted time, current valid approval ID, execution summary, terminal time. | Proposed-action aggregate root/version; FKs to request, the series-owned outbound `logical_operations` row, creator, predecessor/successor, and approval. One request owns each series and operation. | Draft fields are expected-version mutable; submission freezes payload/digest; later material changes create a new row under the same operation. Highly restricted customer-facing content. Historical rows are not hard-deleted. | Unique `(proposal_series_id, proposal_version)`; every row in one series has the same operation; operation/request/series consistency; at most one active nonterminal proposal per series/request; state-dependent frozen/execution checks. |
 | `proposed_action_contributors` | PK `id`. Required: proposal ID, actor ID, contribution kind (`Creator` or `MaterialEditor`), carried-forward flag, recorded time. Nullable: source proposal ID, required only for carried-forward work. | Normalized attribution child; FKs to proposal, application actor, and optional source proposal. | Insert-only. Restricted personnel metadata, retained permanently with the proposal evidence. | Uniqueness covers proposal/actor/kind/source with null treated as a value. Creator row must match `proposed_actions.creator_actor_id`; carried-forward source must be in the same series. |
 | `proposal_approval_exclusions` | PK `id`. Required: proposal ID, excluded actor ID, source contributor ID, frozen time. | Frozen normalized exclusion set copied from represented contributors when the exact proposal is submitted. | Insert-only after submission; security/approval metadata retained with decisions. | Unique `(proposed_action_id, excluded_actor_id)`. FKs preserve immutable actor/source attribution; deferred guard requires every submitted proposal to have its complete exclusion set. |
 | `approval_decisions` | PK `id`. Required: proposal ID, proposal version, payload digest, decision, approver actor ID/role-at-decision, decided time, correlation/command IDs. Nullable: sanitized rationale/policy reference. | Immutable decision child of one exact proposal. FK to approver and proposal; historical role is copied as evidence, not re-resolved for validity. | Insert-only, restricted rationale, retained with proposal history. | Unique `proposed_action_id` permits one effective decision per exact proposal row. Transaction verifies version/digest and exclusion absence; checks bind decision fields and forbid service actors structurally. |
-| `logical_operations` | PK `id`. Required: kind (`AIInterpretation` or `OutboundAction`), request ID, adapter namespace/version intent, created time. Kind-specific required fields: AI input/configuration hash and version references, or exact proposal ID/version/digest, approval ID, and stable outbound-key digest/scope. Nullable: terminal/success attempt reference and safe outcome summary. | Durable operation identity owned by a request; outbound operations also belong to one exact approved proposal. Attempts are append-only children. | Identity and kind-specific intent are immutable; success reference is set once. Restricted operational/provider metadata retained with attempts. | Checks enforce mutually exclusive AI/outbound columns. Unique AI input/configuration identity where reuse is intended; unique `(outbound_key_scope, outbound_key_digest)` for outbound operations. |
-| `integration_attempts` | PK `id`. Required: logical operation ID, attempt number, operation kind, state, adapter/version, created/updated times, `version`. Nullable by lifecycle: claim/started/completed times, safe provider correlation, retryability/uncertainty classification, sanitized error/evidence, result hash/reference. | Mutable execution child of one logical operation; ownership derives from the operation's request/proposal. | State moves forward only; failed/succeeded rows remain historical and are never reset. Restricted provider metadata; full provider payloads are excluded. | Unique `(logical_operation_id, attempt_number)`; partial unique active and succeeded indexes; checks require lifecycle timestamps/evidence appropriate to state. Index operation/time and safe provider correlation. |
+| `logical_operations` | PK `id`. Required: kind (`AIInterpretation` or `OutboundAction`), request ID, created time. AI-specific required fields: input/configuration hash and prompt/schema/provider intent. Outbound-specific required field: proposal series ID. Nullable until outbound execution is first reserved: stable outbound-key digest/scope; nullable after completion: success attempt reference and safe outcome summary. | Durable operation identity owned by one request. An outbound operation belongs to one proposal series across every version; it is not bound to one proposal, approval, or adapter version. AI operations are separate per immutable input/configuration intent. | Identity, ownership, and kind-specific intent are immutable; outbound key fields change from null to one immutable value; success reference is set once. Restricted metadata retained with attempts. | Checks enforce mutually exclusive AI/outbound columns. Unique outbound operation per `(service_request_id, proposal_series_id)` and unique `(outbound_key_scope, outbound_key_digest)` once reserved. AI uniqueness follows its input/configuration identity. |
+| `integration_attempts` | PK `id`. Required: logical operation ID, attempt number, operation kind, state, adapter/version intent, assigned WorkflowService identity/environment, callback-authorization expiry, created/updated times, `version`. Outbound-specific required immutable fields: proposed-action ID/version, frozen payload digest, approval-decision ID, and stable outbound-key scope/digest. Nullable by lifecycle: claim/started/completed times, safe provider correlation, retryability/uncertainty classification, sanitized error/evidence, result hash/reference. | Mutable execution child of one logical operation. Outbound attempt input binds one exact approved proposal historically even when the series later advances; AI ownership derives from the operation input/configuration. | Binding fields never change; lifecycle state moves forward only; failed/succeeded rows remain historical and are never reset. Restricted provider metadata; full provider payloads are excluded. | Unique `(logical_operation_id, attempt_number)`; partial unique active and succeeded indexes; outbound attempt proposal/request/series/operation consistency; callback deadline and lifecycle timestamp checks. Index operation/time and safe provider correlation. |
 | `application_actors` | PK `id`. Required: Supabase subject, display-safe label, active status, created/updated times, `version`. Nullable: disabled time/reason metadata. | Human application identity root mapped from verified Supabase `sub`. | Controlled expected-version changes only. Security metadata; no password/token. Retain identity history for audit attribution. | Unique Supabase subject. Index active status. Disablement fields are consistent with status. |
 | `application_actor_role_assignments` | PK `id`. Required: actor ID, fixed role, assigned-by actor ID, effective-from time, reason. Nullable: effective-to time and revoked-by actor ID. | Append-oriented role history; FKs to target and administrator actors. Current authorization reads the one active assignment. | Insert-only except one-time closure. Security metadata retained with audit history. | Partial unique active assignment per actor; fixed-role check allows only `OperationsAgent`, `ManagerApprover`, `Administrator`; valid non-overlapping intervals require transaction/constraint support. |
 | `machine_identities` | PK `id`. Required: service type, environment, stable service ID, status, created/updated times, `version`. Nullable: disabled time/reason. | Root for `BackendService`, `WorkflowService`, or `EventPublisher`; HTTP authority remains defined by the permission matrix. | Controlled configuration changes only. Security metadata; no credentials. Retained for service audit attribution. | Unique `(environment, stable_service_id)`; service-type check; status/time consistency. |
 | `machine_credential_versions` | PK `id`. Required: machine identity ID, credential version, external secret-reference identifier, status, activated time, created time. Nullable: previous-version overlap end, retired/revoked time, safe rotation reason. | Metadata child of a machine identity; actual HMAC/transport secret remains in external secret configuration. | Append/activate/retire lifecycle only. Highly restricted metadata, never secret values or raw signatures. Retain rotation history. | Unique `(machine_identity_id, credential_version)`; at most the controlled current/previous verification set active; time/status consistency. |
 | `machine_request_nonces` | PK `id`. Required: machine identity ID, environment, verified credential version, nonce digest, signed timestamp, received time, expires time. | Short-lived replay record for authenticated machine requests. | Insert-only then purge after expiry plus safety margin. Security metadata; no raw signature, body, secret, or necessarily raw nonce. | Unique `(machine_identity_id, environment, nonce_digest)` across credential versions prevents rotation replay. Index expiry for cleanup. |
-| `attempt_callback_credentials` | PK `id`. Required: attempt ID, operation kind, WorkflowService identity/environment, credential version, cryptographic credential hash, state, issued/expires times. Nullable: consumed, revoked, replaced times and replacement ID. | Security child of one backend-created attempt and assigned workflow identity. | Metadata lifecycle is one-way; plaintext is never stored. Hash is highly restricted and retained at least through callback-command replay protection, then may be cryptographically expired/purged by policy. | Unique `(attempt_id, credential_version)` and credential hash; partial unique active credential per attempt; state/timestamp checks; replacement stays on same attempt/operation/workflow scope. |
-| `command_idempotency_records` | PK `id`. Required: actor class and actor/service ID, command intent, route template, target type/ID, idempotency-key digest, canonical body hash, status, command/correlation IDs, created time. Nullable until completion: logical HTTP status, safe response snapshot, completed time, callback credential record ID. | Replay record outside the domain aggregate but written in the same command transaction. Intake uses `accepted_intake_keys` instead. | Inserted as transaction-local `Processing`, committed only as terminal `Completed`; immutable thereafter. Response snapshots are restricted and retained for a documented replay window no shorter than the affected side-effect protection. | Unique full actor/intent/route/target/key scope. Same scope/body returns stored result; same scope/different body conflicts. Index target/time and cleanup eligibility. |
+| `attempt_callback_credentials` | PK `id`. Required: attempt ID, operation kind, WorkflowService identity/environment, credential version, cryptographic credential hash, state, issued/expires times. Nullable: consumed, revoked, replaced times and replacement ID. | Security child of one backend-created attempt and assigned workflow identity. | Metadata lifecycle is one-way; plaintext is never stored. Hash is highly restricted and retained at least through callback-command replay protection, then may be cryptographically expired/purged by policy. | Unique `(attempt_id, credential_version)` and credential hash; partial unique active credential per attempt; state/timestamp checks; replacement stays on the same nonterminal attempt/operation/workflow scope and must not extend its callback-authorization deadline. |
+| `command_idempotency_records` | PK `id`. Required: actor class and actor/service ID, command intent, route template, target type/ID, idempotency-key digest, canonical body hash, status, command/correlation IDs, created time. Nullable until completion: logical HTTP status, safe response snapshot, completed time, callback credential record ID, safe secret-delivery receipt metadata. | Replay record outside the domain aggregate but written in the same command transaction. Intake uses `accepted_intake_keys` instead. | Inserted as transaction-local `Processing`, committed only as terminal `Completed`; immutable thereafter. Snapshots never contain callback plaintext/hash. Secret-bearing first responses are intentionally not reproducible; replay returns only the stored safe receipt. | Unique full actor/intent/route/target/key scope. Same scope/body returns the permitted stored result; same scope/different body conflicts. Index target/time and cleanup eligibility. |
 | `audit_events` | PK/event ID `id`. Required: schema version, event name, aggregate type/ID/version, actor type and immutable actor ID, occurred time, outcome, correlation, causation and command references, safe reason codes/metadata. Nullable: rule/prompt/schema/adapter references when inapplicable. | Canonical evidence ledger, separate from domain aggregates, security telemetry, and integration events. Links may be polymorphic safe identifiers rather than cascading FKs. | Insert-only through backend audit writer. Restricted by projection; no secrets, tokens, callback hashes, raw PII/provider payloads. Not hard-deleted in MVP. | Index aggregate/version/time, correlation, command, actor/time, and event name. Event IDs unique; application/database permissions deny ordinary update/delete. |
 | `outbox_messages` | PK/event ID `id`. Required immutable fields: event type/schema version, aggregate type/ID/version, audit event ID, correlation/causation, allowlisted payload, created and available times. Required publication controls: state. Nullable controls: lease owner/until, published/dead-letter time and safe terminal reason. | Durable integration message created beside domain state and audit evidence. FK to the originating audit event. | Identity/payload are immutable; only publisher control fields change. Payload is PII-minimized. Retain through consumer recovery needs, then archive without changing audit history. | Index `(state, available_at)` and lease expiry; unique event ID; checks constrain claim/published/dead-letter fields. Multiple events at one aggregate version are allowed. |
 | `outbox_publication_attempts` | PK `id`. Required: outbox message ID, attempt number, publisher identity, started time, state. Nullable until completion: outcome, completed time, transport message ID, safe error code/metadata. | Historical child of an outbox message; written only by EventPublisher's constrained database role/process. | Insert once as started and complete once; never reset or delete. Sanitized transport metadata is retained with outbox publication history. | Unique `(outbox_message_id, attempt_number)`; index incomplete attempts and outcome/time; publisher identity FK; completion fields change together once. |
@@ -54,10 +54,10 @@ In the tables below, “restricted” means operational customer or provider dat
 - The original delivery referenced by `accepted_intake_keys` is accepted-new, and its request has that delivery as its unique origin. Deferred constraints validate this graph at commit.
 - Service-request checks enumerate valid basic combinations. `RetryableFailure` requires a recovery target; nonfailure states do not carry one. `Completed` and `ClosedDuplicate` have no active queue. `TerminalFailure` also has no canonical active queue; failure visibility is produced by an explicit derived operational view rather than pretending the terminal record remains active work.
 - Priority is null until deterministic triage produces it. `Urgent` never maps to `PriorityRequests`; review/approval checkpoints use `HumanReview`. Basic status/queue combinations are checked, while the exact routing policy remains FastAPI-owned.
-- A proposal's series/request pairing and version are unique. Self-references stay in the same series, and the request's active proposal is validated as belonging to that request. Partial uniqueness prevents two active proposal rows for one series.
+- A proposal's series/request pairing and version are unique. One outbound logical operation is unique for that request/series, and every proposal version has a required FK to it. Self-references stay in the same series, and the request's active proposal is validated as belonging to that request. Partial uniqueness prevents two active proposal rows for one series.
 - `Rejected`, `Superseded`, `Executed`, and `TerminalExecutionFailure` rows fail executable-state checks. No active operation may point to those states.
 - An approval row stores and matches the proposal ID, proposal version, and frozen digest. Unique proposal ID permits one effective decision. Approval rows are never updated or deleted.
-- Logical-operation kind checks require outbound operations to reference an exact approved proposal and stable outbound key, while AI operations require their input/configuration identity. Unique outbound key scope and succeeded-attempt indexes prevent a second success.
+- Logical-operation kind checks require outbound operations to reference one request/proposal series and AI operations to reference their immutable input/configuration identity. The outbound key becomes immutable once reserved. Each outbound attempt—not the operation—stores the exact approved proposal, digest, approval, adapter intent, and outbound-key identity. Unique outbound-key scope and succeeded-attempt indexes prevent a second success across every proposal version.
 - Attempts have unique increasing numbers within an operation, one active (`Pending` or `Running`) row at most, and one `Succeeded` row at most. State/timestamp checks prevent a failed attempt from returning to `Pending`.
 
 ### Guarded FastAPI transaction enforcement
@@ -97,6 +97,12 @@ The idempotency record is inserted as `Processing` inside the same transaction t
 
 Callback records additionally bind the attempt callback-credential record used. A terminal callback replay is returned only after valid HMAC authentication and proof of the same credential, command key, route, target, and body hash. Command replay protection is not provider-side-effect protection: outbound operations separately retain their backend-generated stable outbound key across attempts.
 
+### Secret-bearing command responses
+
+Attempt creation and callback-credential replacement return plaintext only in the first successful secret-bearing response to the assigned WorkflowService context, assembled from in-memory material after commit. Human-facing projections never contain it. `command_idempotency_records` stores the attempt ID, credential record/version, expiry, logical status, and a safe delivery receipt such as `PlaintextIssued`; it stores neither plaintext nor credential hash.
+
+An exact replay proves that the command committed and returns the same safe resource metadata with `credential_delivery` set to `AlreadyIssued`; it cannot reproduce or fabricate plaintext. If delivery was uncertain, the assigned WorkflowService submits a new idempotency key to the guarded replacement command using the current expected credential version. Losing that replacement response is handled the same way: replay yields only a receipt, then another authorized replacement may create the next version.
+
 ## Machine nonce replay persistence
 
 FastAPI first validates header shape, timestamp window, known enabled service/credential candidate, body digest, and HMAC signature in constant time. Only after sufficient signature validation does it perform a separate short transaction inserting `machine_request_nonces`. Persisting attacker-controlled nonces before signature verification would permit storage exhaustion and denial of legitimate requests.
@@ -109,9 +115,13 @@ Expiry is the signed timestamp window plus processing margin. A controlled clean
 
 FastAPI creates a high-entropy plaintext credential in memory when it creates an attempt, hashes it, and inserts one `attempt_callback_credentials` row in the same transaction. The plaintext is returned once only after commit to the assigned WorkflowService context; rollback means it is never released.
 
-The row binds exact attempt ID, operation kind, WorkflowService identity/environment, credential version, hash, and expiry. One partial unique active-row constraint prevents concurrent active credentials. Replacement inserts the next version and atomically marks the old row `Replaced`; revocation and consumption are one-way states. Replacement never changes attempt, operation, or workflow scope.
+The row binds exact attempt ID, operation kind, WorkflowService identity/environment, credential version, hash, and expiry. One partial unique active-row constraint prevents concurrent active credentials. Replacement inserts the next version and atomically marks the old row `Replaced`; revocation and consumption are one-way states. Replacement never changes attempt, operation, or workflow scope and never extends the attempt's fixed callback-authorization deadline.
 
 A callback requires valid HMAC, a constant-time hash match, exact scope, unexpired active state, and the callback command guard. An accepted terminal result consumes the credential in the same transaction as attempt/domain/audit/outbox changes. The same terminal callback may later receive the stored command result using that consumed credential only when every idempotency binding matches. A different result, key, body, attempt, or credential returns the approved conflict/forbidden response.
+
+Credential replacement is an explicit security command, not a lifecycle transition. It is allowed only to the HMAC-authenticated WorkflowService identity/environment assigned to the same `Pending` or `Running` attempt, before its callback-authorization deadline. The request supplies the expected active credential version. Under an attempt/credential row lock, the command marks that version `Replaced`, inserts exactly the next version for the same scope, and returns its plaintext once after commit. It cannot start, retry, complete, terminalize, invoke a provider, or change any request, proposal, approval, priority, queue, routing, or retry field.
+
+Concurrent replacements targeting the same expected version serialize. One creates the next version; the other observes the changed version and returns `409 CALLBACK_CREDENTIAL_VERSION_CONFLICT`. Terminal or expired attempts return `409 CALLBACK_CREDENTIAL_REPLACEMENT_NOT_ALLOWED`; wrong service/attempt scope returns concealed `404` or `403 CALLBACK_FORBIDDEN`. No replacement command emits an integration event because canonical lifecycle state does not change; it appends only sanitized security audit evidence and its command-idempotency record.
 
 Plaintext credentials and credential hashes never appear in audit events, integration events, provider payloads, ordinary logs, Git, or ordinary queries.
 
@@ -125,7 +135,9 @@ Approval/rejection locks the exact proposal, checks its submitted version/digest
 
 ## Logical operations and attempts
 
-One `logical_operations` row represents one AI input/configuration intent or one exact outbound side effect. All retries remain children of that identity. AI changes to input, prompt/schema, or configuration create a new logical operation; outbound retries keep the exact proposal, approval, adapter namespace, and stable outbound-key digest.
+One `logical_operations` row represents one AI input/configuration intent or one outbound proposal-series side effect. AI operations are created when interpretation starts; changing AI input, prompt/schema, or configuration creates another AI operation. An outbound operation is created atomically with the first draft, belongs to that request/series, and is reused by every material revision and retry. It never stores one immutable proposal/approval binding.
+
+Every outbound attempt instead freezes the exact proposed-action ID/version, payload digest, approval-decision ID, adapter/version intent, and stable outbound-key identity it is authorized to execute. A failed attempt on an older proposal remains historical after revision. A succeeded attempt sets the operation's success reference and blocks later attempts and material revisions under all proposal versions in that series.
 
 Credible PostgreSQL enforcement uses:
 
@@ -135,7 +147,7 @@ Credible PostgreSQL enforcement uses:
 - unique `(outbound_key_scope, outbound_key_digest)` for outbound logical operations; and
 - kind-specific checks preventing AI fields on outbound rows and outbound fields on AI rows.
 
-The next attempt number is selected while the logical-operation row is locked; it must be exactly the current maximum plus one. Initial or retry creation also rechecks the no-active/no-success indexes. Outbound creation locks and validates the exact proposal and approval first.
+The next attempt number is selected while the logical-operation row is locked; it must be exactly the current maximum plus one. Initial or retry creation also rechecks the no-active/no-success indexes. Outbound creation uses the proposal's existing operation, locks and validates the exact proposal/approval, reserves the operation's stable key if not already set, and copies the exact authorization snapshot to the new attempt.
 
 An uncertain provider outcome is stored as explicit safe evidence/classification on the failed/running attempt. It is not automatically marked retryable. FastAPI permits retry only when later policy and adapter reconciliation prove safety; this design intentionally defines no retry count or classification formula.
 
@@ -192,77 +204,91 @@ Transactions are short and use unique indexes, targeted row locks, and optimisti
 3. Insert triage/routing/queue audit events and corresponding outbox messages; complete the command response record.
 4. Commit together. Stale version, missing/current-evidence mismatch, or constraint failure changes nothing and returns the specific conflict.
 
-### 5. Proposal submission
+### 5. Draft and outbound-operation creation
+
+1. Resolve command idempotency; lock the service request, compare its expected version, and verify an allowed draft checkpoint with no conflicting active proposal.
+2. Generate one proposal series ID and one `OutboundAction` logical-operation ID. Insert the operation owned by that request/series with no outbound key yet, then insert proposal version `1` with a required FK to it and creator attribution; update the request's active proposal and version.
+3. Insert draft/operation/request audit evidence and allowlisted outbox messages; complete the command record. No attempt, approval, provider call, callback credential, or outbound key is created.
+4. Commit all rows together. Series/operation uniqueness or version failure rolls back the entire draft graph; a replay returns the original safe proposal-series/operation references.
+
+### 6. Proposal submission
 
 1. Resolve command idempotency; lock the request and draft proposal and compare both expected versions, active reference, and allowed states.
 2. Validate required content, calculate/freeze the payload digest, ensure contributor history, insert the complete normalized exclusion set, and update proposal to `PendingApproval` plus request to `AwaitingApproval`/`HumanReview`, incrementing both versions.
 3. Insert proposal/request audit events and outbox messages; complete the command result.
 4. Commit atomically. Any missing attribution, concurrent edit, or state conflict leaves the draft/request unchanged.
 
-### 6. Approval
+### 7. Approval
 
 1. Resolve command idempotency; lock the exact request/proposal and compare versions, submitted digest, active proposal, `AwaitingApproval`/`PendingApproval`, and no prior decision.
 2. Verify the authenticated ManagerApprover/Administrator UUID is absent from exclusions. Insert the unique immutable approval; update proposal to `Approved`, request to `ActionPendingExecution`, queue, current approval reference, and versions.
 3. Insert approval/proposal/request/queue audit events and allowlisted outbox messages; complete the command response.
 4. Commit together. Self-approval, unique-decision race, stale digest/version, or state failure rolls back every change.
 
-### 7. Rejection
+### 8. Rejection
 
 1. Resolve command idempotency and lock/check the same exact proposal/request/decision/exclusion guards as approval.
 2. Insert the unique immutable rejection; update proposal to `Rejected` and request to `ActionRevisionRequired` in `HumanReview`, incrementing versions. Create no logical operation or attempt.
 3. Insert decision and lifecycle audit/outbox rows and complete the stored result.
 4. Commit together; a concurrent decision or guard failure leaves all state unchanged.
 
-### 8. Material proposal revision
+### 9. Material proposal revision
 
-1. Resolve command idempotency; lock the request, active source proposal, relevant logical operation/attempt rows, and compare expected versions. Verify no active/successful operation and an allowed revision path.
-2. Insert a replacement `Draft` in the same series with next unique version, creator/editor and carried-forward contributor rows. Mark the old proposal `Superseded` where applicable, move the active request reference, clear recovery data, and update request to `ActionRevisionRequired`/`HumanReview` with versions.
+1. Resolve command idempotency; lock the request, active source proposal, its existing outbound logical operation, and relevant attempt rows; compare expected versions and verify one request/series/operation identity, no active/successful attempt, and an allowed revision path.
+2. Insert a replacement `Draft` in the same series with the same required logical-operation FK and next unique version, plus creator/editor and carried-forward contributor rows. Never insert another outbound operation. Mark the old proposal `Superseded` where applicable, move the active request reference, clear recovery data, and update request to `ActionRevisionRequired`/`HumanReview` with versions.
 3. Preserve old approval/attempt rows; insert approval-validity-lost and revision lifecycle audit/outbox rows and complete the command response.
 4. Commit as one unit. Version/index/operation conflicts leave the old proposal executable or retryable exactly as before.
 
-### 9. Initial integration-attempt creation
+### 10. Initial integration-attempt creation
 
-1. Resolve command idempotency; lock the owner request and proposal/approval when outbound. Verify current input, exact approval, expected versions, and absence of active/successful operation.
-2. Insert or reuse the correct logical operation, then insert attempt number `1` as `Pending` and one active callback-credential hash. Update owner state/version as required; reserve the outbound key only for outbound work.
-3. Insert attempt/owner audit events and outbox messages, complete the command response, and retain plaintext callback credential only in memory.
-4. Commit, then return the plaintext credential once to WorkflowService. Any failure rolls back operation, attempt, hash, owner transition, audit, and outbox.
+1. Resolve command idempotency. For AI, lock the request/input and create the AI logical operation when interpretation starts. For outbound, lock the request, exact proposal/approval, and the proposal's already-existing outbound operation; verify versions, shared request/series identity, and no active/successful attempt.
+2. For outbound, reserve the operation's stable key once if still null and select the next attempt number (normally `1`, but later after a failed older proposal). Insert `Pending` with immutable exact proposal ID/version/digest, approval ID, adapter/version intent, and stable key identity. For either kind, set the fixed callback-authorization deadline and insert credential version `1` hash.
+3. Update owner state/version as required; insert attempt/owner audit and outbox rows; complete the command record with safe attempt/credential metadata and a plaintext-issued receipt, never the plaintext/hash.
+4. Commit, then return plaintext once from memory. If delivery is lost, exact replay returns only the safe receipt; WorkflowService must use the replacement command. Any transaction failure rolls back all operation/attempt/credential/owner/evidence rows.
 
-### 10. Retry-attempt creation
+### 11. Retry-attempt creation
 
-1. Resolve command idempotency; lock the logical operation, failed attempt, owner request, and outbound proposal/approval when applicable. Verify retryable evidence/policy, versions, and no active/successful sibling.
-2. Select the next number while the operation is locked; insert a new `Pending` attempt under the same logical operation/outbound key and a new callback-credential hash. Failed attempts remain unchanged. Update owner recovery state/version.
-3. Insert retry/attempt/owner audit and outbox rows and complete the stored response.
-4. Commit and release the new plaintext credential once. Uniqueness, approval, policy, or concurrency failure creates no attempt.
+1. Resolve command idempotency; lock the logical operation, failed attempt, owner request, and exact current outbound proposal/approval when applicable. Verify retryable evidence/policy, versions, shared request/series/operation identity, and no active/successful sibling.
+2. Select the next number while the same operation is locked; insert a new `Pending` attempt under its immutable outbound key. Copy the exact current proposal ID/version/digest, approval ID, adapter/version intent, and key identity to the attempt; insert callback credential version `1` for that new attempt. Older failed attempts and their proposal bindings remain unchanged.
+3. Update owner recovery state/version; insert retry/attempt/owner audit/outbox rows; complete the command record with safe secret-delivery metadata only.
+4. Commit and return plaintext once from memory. Lost delivery uses the replacement command; uniqueness, approval, policy, or concurrency failure creates no attempt.
 
-### 11. Attempt success callback
+### 12. Attempt success callback
 
-1. After HMAC/nonce validation, resolve callback command idempotency and credential proof; lock the attempt, logical operation, and owner aggregates. Verify `Running`, exact scope, expected version, and no successful sibling.
-2. Mark the attempt `Succeeded`, set safe result evidence, consume the credential, set operation success once, and insert the AI interpretation or transition exact outbound proposal/request as appropriate with version increments.
+1. After HMAC/nonce validation, resolve callback command idempotency and credential proof; lock the attempt, logical operation, and owner aggregates. Verify `Running`, exact scope, expected version, immutable attempt input, and no successful sibling.
+2. Mark the attempt `Succeeded`, set safe result evidence, consume the credential, and set the operation success reference once. For outbound, transition only the exact proposal ID/version/digest and approval bound on the attempt plus its request; that operation-level success blocks every later proposal version, revision, start, or retry. For AI, insert the interpretation for the operation input.
 3. Insert attempt/result/owner audit events and outbox messages; complete the callback command result.
 4. Commit atomically. Identical replay returns the stored result; a second/different success or contradictory terminal result rolls back with `INTEGRATION_RESULT_CONFLICT`.
 
-### 12. Retryable-failure callback
+### 13. Retryable-failure callback
 
 1. Authenticate, resolve callback idempotency/credential, and lock the running attempt, operation, and owners; verify exact scope and no terminal/success result.
 2. Mark the attempt `RetryableFailure` with sanitized classification/evidence, consume the credential, and update request/proposal recovery state and versions. Do not create the retry attempt automatically.
 3. Insert failure/recovery audit and outbox rows and complete the stored result.
 4. Commit together. An uncertain outcome is recorded without asserting retry eligibility; contradictory or stale callbacks roll back.
 
-### 13. Terminal-failure callback
+### 14. Terminal-failure callback
 
 1. Authenticate, resolve callback idempotency/credential, and lock the exact attempt, operation, and owners; validate terminal classification and no prior result.
 2. Mark the attempt `TerminalFailure`, consume the credential, and update request/proposal terminal state, queue visibility facts, and versions. Prevent later attempt creation through state and indexes.
 3. Insert terminal failure audit/outbox rows and complete the stored result.
 4. Commit together. Identical replay uses the stored result; contradiction or invalid classification changes nothing.
 
-### 14. Command-idempotency replay
+### 15. Callback-credential replacement
+
+1. Authenticate HMAC and nonce, resolve replacement-command idempotency, then lock the exact attempt and active callback credential. Verify the assigned WorkflowService identity/environment, expected attempt version, expected credential version, `Pending`/`Running` state, and unexpired callback-authorization deadline.
+2. Generate the next plaintext in memory, hash it, mark the expected credential `Replaced`, and insert exactly the next version for the same attempt/operation/workflow scope with expiry no later than the attempt deadline. Do not update the attempt or any domain lifecycle field.
+3. Insert sanitized security audit evidence and complete the command record with safe credential version/expiry/delivery-receipt metadata only; create no integration event/outbox message.
+4. Commit, then return plaintext once. Exact replay returns no plaintext; a new key plus current expected version performs another recovery. Concurrent commands for one expected version yield one success and one version conflict; terminal, expired, or wrong-scope attempts create nothing.
+
+### 16. Command-idempotency replay
 
 1. After authentication/permission (and callback proof where applicable), look up the full scoped key before expected-version evaluation.
-2. If the body hash matches a completed row, read its stored logical status/response without locking or changing domain rows. If it differs, return `409 COMMAND_IDEMPOTENCY_CONFLICT`.
+2. If the body hash matches a completed row, read its stored logical status/response without locking or changing domain rows. For a secret-bearing command, return only safe attempt/credential metadata and `AlreadyIssued`, never plaintext. If the body differs, return `409 COMMAND_IDEMPOTENCY_CONFLICT`.
 3. Replays create no new audit/outbox/domain evidence unless a separately approved security-denial audit is required.
-4. Return the original result. A transaction-local concurrent `Processing` insert resolves by waiting for commit/rollback, never by stealing execution.
+4. Return the original safe result or, for a secret-bearing command, the non-secret issuance receipt. A transaction-local concurrent `Processing` insert resolves by waiting for commit/rollback, never by stealing execution.
 
-### 15. Outbox publication claim and result
+### 17. Outbox publication claim and result
 
 1. In a short claim transaction, EventPublisher selects eligible pending or expired-lease rows with row locks/`SKIP LOCKED`, sets lease owner/deadline and `Publishing`, inserts the next started publication-attempt row, and commits.
 2. Publish outside the transaction using immutable `event_id` and payload. Consumers deduplicate that ID.
@@ -318,9 +344,9 @@ No migration files are created by this design. A safe future sequence is:
 2. `application_actors`, role assignments, `machine_identities`, and credential metadata.
 3. Intake reservation/delivery, contacts, and service-request aggregates, initially with deferred circular links.
 4. AI interpretations, duplicate candidates, and routing decisions.
-5. Proposed actions, contributor attribution, and frozen approval exclusions.
+5. Logical operations, proposed actions, contributor attribution, and frozen approval exclusions so every proposal can require its series-owned operation FK from creation.
 6. Approval decisions and exact proposal/decision constraints.
-7. Logical operations and integration attempts.
+7. Integration attempts and their exact AI/outbound execution-binding constraints.
 8. Command idempotency, nonce, and callback-credential security records.
 9. Canonical audit events and restricted projections.
 10. Outbox messages, publication attempts, and publisher privileges.
@@ -340,18 +366,31 @@ These are requirements for later executable integration/constraint tests; no tes
 5. Conflicting command-key reuse returns `COMMAND_IDEMPOTENCY_CONFLICT` without mutation.
 6. Concurrent proposal approval attempts create one immutable decision.
 7. Self-approval is rejected from the frozen normalized exclusion set despite role changes.
-8. Concurrent initial attempt creation produces one active attempt.
-9. Concurrent retry creation produces one next-numbered active attempt.
-10. A second successful attempt for one logical operation is prevented.
-11. A replayed machine nonce is rejected across credential-version overlap.
-12. An expired callback credential is rejected.
-13. A callback credential cannot authorize another attempt or operation kind.
-14. An identical terminal callback replay returns the stored result after credential consumption.
-15. A contradictory terminal callback returns `INTEGRATION_RESULT_CONFLICT`.
-16. A forced error proves state, audit, command record, and outbox rows roll back atomically.
-17. Publisher crash after transport send but before acknowledgment leads to safe redelivery.
-18. Duplicate publisher delivery is deduplicated by the consumer's `event_id` record.
-19. Competing expected-version commands produce one success and one `CONCURRENCY_CONFLICT`.
+8. Draft creation atomically produces one proposal series and one outbound logical operation.
+9. Material revision preserves the source proposal's logical-operation ID.
+10. Old and replacement proposals cannot create separate outbound operations for one series/intended side effect.
+11. Each outbound attempt immutably binds its exact proposal ID/version/digest, approval, adapter intent, and stable outbound key.
+12. A failed attempt on an old proposal remains historical after a replacement is created and approved.
+13. Success under any proposal version blocks every later attempt or revision under the operation.
+14. Concurrent initial attempt creation produces one active attempt.
+15. Concurrent retry creation produces one next-numbered active attempt.
+16. A second successful attempt for one logical operation is prevented by the database backstop.
+17. A replayed machine nonce is rejected across credential-version overlap.
+18. An expired callback credential is rejected.
+19. A callback credential cannot authorize another attempt or operation kind.
+20. An identical terminal callback replay returns the stored result after credential consumption.
+21. A contradictory terminal callback returns `INTEGRATION_RESULT_CONFLICT`.
+22. A forced error proves state, audit, command record, and outbox rows roll back atomically.
+23. Publisher crash after transport send but before acknowledgment leads to safe redelivery.
+24. Duplicate publisher delivery is deduplicated by the consumer's `event_id` record.
+25. Competing expected-version commands produce one success and one `CONCURRENCY_CONFLICT`.
+26. Attempt creation commits but its initial plaintext-credential response is lost without making the attempt unrecoverable.
+27. Exact command replay returns a safe receipt and neither exposes nor fabricates lost plaintext.
+28. The assigned WorkflowService can replace a credential for one still-eligible attempt and receives one new plaintext version.
+29. Successful replacement atomically invalidates the prior credential.
+30. Concurrent replacements targeting one expected version leave one active credential and return one version conflict.
+31. Wrong WorkflowService, wrong attempt, expired callback-authorization deadline, and terminal-attempt replacement are denied.
+32. A replacement credential authorizes only the original attempt, operation kind, WorkflowService identity, and environment.
 
 ## Deferred implementation choices
 

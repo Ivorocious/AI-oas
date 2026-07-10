@@ -16,12 +16,12 @@ The MVP targets one demonstration organization and uses Supabase Postgres as its
 2. Trusted application processes generate collision-safe UUIDv4 row/event identities; Postgres generates canonical UTC timestamps and enforces primary-key uniqueness.
 3. Mutable aggregate roots use optimistic integer versions. FastAPI checks expected versions and performs atomic compare-and-update; Postgres enforces relational, uniqueness, and basic valid-combination constraints.
 4. Accepted intake uses a dedicated `accepted_intake_keys` reservation, unique by source/channel scope and key digest. Only a valid new acceptance reserves it. Invalid deliveries remain evidence without blocking later corrected use.
-5. Intake replay, non-intake command replay, machine nonce replay, attempt callback authorization, and outbound provider-side-effect idempotency are separate mechanisms with separate scopes and records.
+5. Intake replay, non-intake command replay, machine nonce replay, attempt callback authorization/replacement, and outbound provider-side-effect idempotency are separate mechanisms with separate scopes and records.
 6. Non-intake commands store actor/intent/route/target/key scope, canonical body hash, and safe original result in `command_idempotency_records`. The record commits atomically with domain, audit, and outbox changes.
 7. Machine requests persist a nonce digest only after sufficient timestamp/signature validation. Uniqueness spans a machine identity/environment across credential versions; secrets and raw signatures are never stored.
-8. Callback credentials are opaque, hashed at rest, versioned, expiring, and bound to one attempt, operation kind, WorkflowService identity, and environment. Plaintext is returned once after commit and terminal use consumes the credential while identical command replay remains possible.
+8. Callback credentials are opaque, hashed at rest, versioned, expiring, and bound to one attempt, operation kind, WorkflowService identity, and environment. Plaintext is returned once after commit and is never persisted in command responses. Exact replay returns only a safe receipt; an authorized expected-version replacement command recovers lost delivery by invalidating the old version and returning one new plaintext value.
 9. Proposal creator/editor history and frozen approval exclusions use normalized immutable rows. Self-approval compares immutable actor UUIDs; role changes cannot rewrite exclusion history.
-10. Each AI intent or outbound side effect has one `logical_operations` row with one-way, history-preserving `integration_attempts`: an attempt advances toward a terminal state, while a retry appends a new row. Partial unique indexes permit at most one active and one successful attempt; outbound operations retain one stable backend-generated key.
+10. Each AI input/configuration intent has its own `logical_operations` row created when interpretation starts. Each outbound proposal series gets one durable operation when its first draft is created; all proposal revisions and retries retain it. Every outbound attempt freezes the exact proposal ID/version/digest, approval ID, adapter intent, and stable backend-generated key it executes. Partial unique indexes permit at most one active and one successful attempt, and success blocks later series revisions/attempts.
 11. Every material command writes canonical state, required `audit_events`, and immutable `outbox_messages` in one transaction. Failure rolls back all three.
 12. A separate EventPublisher claims leased outbox rows and records durable one-way publication-attempt history. Delivery is at least once; consumers deduplicate `event_id` and use aggregate version for ordering/gap behavior.
 13. FastAPI owns authorization, lifecycle/domain policy, deterministic decisions, retry eligibility, hashing, self-approval/exact-proposal validation, redaction, and audit/outbox content. Postgres owns structural integrity, uniqueness, compare-and-change support, atomicity, and durability.
@@ -47,6 +47,14 @@ Rejected for the MVP. Normalized rows give foreign keys, uniqueness, direct memb
 ### Store only integration attempts without logical operations
 
 Rejected. Retry attempts need one stable AI input/configuration or outbound-side-effect identity, a stable outbound key, and database-enforceable active/success uniqueness across attempts.
+
+### Bind an outbound operation to one exact proposal version
+
+Rejected. Material revisions preserve the intended side effect and logical operation while requiring new exact approval. Exact execution authorization therefore belongs immutably on each attempt, not on the series-wide operation.
+
+### Persist or reversibly encrypt callback plaintext for replay
+
+Rejected. It would weaken the hash-only credential decision and expand secret exposure. A safe idempotent receipt plus guarded one-version replacement gives recoverability without storing recoverable plaintext.
 
 ### Publish events after the domain transaction
 
@@ -76,6 +84,8 @@ Rejected. Targeted row locks, expected-version updates, deferred relationship ch
 - Database constraints backstop lifecycle and attempt invariants without moving policy out of FastAPI.
 - Approval history preserves creator/editor provenance and separation of duties.
 - Provider retries share one durable operation identity and cannot create a second success.
+- Proposal revisions retain one outbound operation while each attempt remains explainable against its exact historical proposal and approval.
+- Lost callback-credential delivery is recoverable without storing plaintext or allowing multiple active versions.
 - Audit and integration notifications cannot be silently separated from committed state.
 - Publisher crashes produce recoverable duplicate delivery rather than lost events.
 - Machine replay and callback scope persist without storing reusable secrets.
@@ -85,6 +95,7 @@ Rejected. Targeted row locks, expected-version updates, deferred relationship ch
 - Multi-aggregate commands require careful lock ordering, deferred constraints, and transactional tests.
 - Normalized attribution and separate replay-protection tables add joins and retention policies.
 - Command response snapshots and sensitive hashes require restrictive projections and cleanup rules.
+- Secret-bearing command replay is intentionally asymmetric: it confirms issuance but cannot reproduce plaintext, so callers must understand the replacement flow.
 - Outbox publication needs leases, attempt history, monitoring, and consumer deduplication.
 - Application-generated UUIDs and canonical hashes must be consistent across every producer.
 - Append-oriented evidence increases storage and makes destructive rollback of later migrations unsafe.

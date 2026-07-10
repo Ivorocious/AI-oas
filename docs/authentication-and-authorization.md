@@ -101,13 +101,15 @@ When the backend creates an `IntegrationAttempt`, it creates a high-entropy opaq
 - One `WorkflowService` identity/environment
 - One expiration timestamp
 
-The plaintext credential is returned once to the authorized workflow context using a dedicated header or response field and is never emitted in integration events, audit metadata, provider payloads, Git, or ordinary logs. The backend stores only a cryptographic hash plus safe metadata such as attempt ID, expiry, issued/consumed timestamps, and credential version.
+The plaintext credential is returned once to the authorized workflow context in the first successful secret-bearing command response and is never emitted in integration events, audit metadata, provider payloads, Git, ordinary logs, or stored command responses. The backend stores only a cryptographic hash plus safe metadata such as attempt ID, expiry, issued/consumed timestamps, and credential version.
 
 Result callbacks require both valid HMAC headers and the opaque credential, proposed as `X-Attempt-Callback-Credential`. The backend verifies the credential in constant time against the stored hash and exact attempt scope. It cannot create or authorize another attempt, select lifecycle state, or authorize a different operation kind.
 
 After a terminal callback is accepted, the credential is consumed. A later request can receive the original idempotent callback result only when machine authentication is valid and the same callback credential hash, command idempotency key, route, and canonical body match the stored command result. A new key, different body/result, different attempt, expired credential, or replaced credential cannot use the consumed token.
 
-Credential expiry and replacement are backend policy. Rotation creates a new credential version for the same still-eligible attempt and invalidates the prior version. AI and mock-email providers never call the canonical callback endpoint directly in the MVP.
+If attempt creation commits but its plaintext response is lost, exact command replay returns only safe attempt/credential metadata and an `AlreadyIssued` receipt; plaintext cannot be recovered from the stored hash. The assigned WorkflowService recovers by calling `POST /api/v1/integration-attempts/{attempt_id}/commands/replace-callback-credential` with a new command key and the expected active credential version.
+
+Replacement requires valid WorkflowService HMAC, exact assigned identity/environment, the same nonterminal attempt/operation kind, an unexpired fixed callback-authorization deadline, and an exact active credential version. It atomically marks the old version replaced and inserts one next version, whose plaintext is returned once. Concurrent commands for the same expected version yield one replacement and one version conflict. Exact replay of the replacement also returns no plaintext; another uncertain delivery requires another new replacement command. The command cannot start, retry, complete, terminalize, invoke a provider, or change domain state. AI and mock-email providers never call callback or replacement endpoints directly.
 
 ## Authorization enforcement model
 
@@ -154,12 +156,13 @@ A material revision creates a new proposal version and attribution set. Prior ap
 | `BS` | `BackendService` only through trusted internal execution, never an external reusable credential. |
 | `WF` | `WorkflowService` has valid HMAC auth, an allowlisted orchestration intent, current versions, stable command idempotency, and minimum target scope. |
 | `WA` | `WorkflowService` is assigned to the exact backend-created attempt and it is eligible to be claimed/started. |
+| `CR` | `WorkflowService` is assigned to the exact nonterminal attempt/environment; callback-authorization deadline and expected active credential version are current; replacement changes only credential metadata. |
 | `CB` | Valid `WorkflowService` HMAC plus valid attempt-scoped callback credential and evidence-only callback body. |
 | `OQ` | Human access is limited to operationally necessary records and field projection for the demonstration organization. |
 | `WQ` | Workflow query is limited to the exact request/proposal/attempt needed for an assigned operation and attempt-scoped fields. |
 | `MA` | Manager audit search is limited to broader operational evidence; security and machine-credential audit remains administrator-only. |
 
-The API catalog has 20 command rows. Submission and replacement submission deliberately share one route template, so these represent 20 documented command intents over 19 unique mutation route templates. Both intents appear below because their guards differ.
+The API catalog has 21 command rows. Submission and replacement submission deliberately share one normalized route template, so these represent 21 documented command intents over 20 unique mutation route templates. Both submission intents appear below because their guards differ.
 
 ### Mutation commands
 
@@ -182,9 +185,10 @@ The API catalog has 20 command rows. Submission and replacement submission delib
 | 15 | Start outbound — `POST /proposed-actions/{action_id}/commands/start-outbound` | D | D | D | D | C-BS | C-WF | D |
 | 16 | Retry outbound — `POST /proposed-actions/{action_id}/commands/retry-outbound` | D | C-RT | C-RT | C-RT | C-BS | C-WF | D |
 | 17 | Claim/start attempt — `POST /integration-attempts/{attempt_id}/commands/start` | D | D | D | D | C-BS | C-WA | D |
-| 18 | Success callback — `POST /integration-attempts/{attempt_id}/callbacks/succeeded` | D | D | D | D | D | C-CB | D |
-| 19 | Retryable-failure callback — `POST /integration-attempts/{attempt_id}/callbacks/retryable-failure` | D | D | D | D | D | C-CB | D |
-| 20 | Terminal-failure callback — `POST /integration-attempts/{attempt_id}/callbacks/terminal-failure` | D | D | D | D | D | C-CB | D |
+| 18 | Replace callback credential — `POST /integration-attempts/{attempt_id}/commands/replace-callback-credential` | D | D | D | D | D | C-CR | D |
+| 19 | Success callback — `POST /integration-attempts/{attempt_id}/callbacks/succeeded` | D | D | D | D | D | C-CB | D |
+| 20 | Retryable-failure callback — `POST /integration-attempts/{attempt_id}/callbacks/retryable-failure` | D | D | D | D | D | C-CB | D |
+| 21 | Terminal-failure callback — `POST /integration-attempts/{attempt_id}/callbacks/terminal-failure` | D | D | D | D | D | C-CB | D |
 
 All paths in the matrix are under `/api/v1`; the prefix is omitted after row 1 for readability.
 
@@ -206,7 +210,7 @@ All paths in the matrix are under `/api/v1`; the prefix is omitted after row 1 f
 | 12 | `GET /integration-attempts/{attempt_id}` | D | C-OQ | C-OQ | A | C-BS | C-WQ | D |
 | 13 | `GET /audit-events?aggregate_type=&aggregate_id=&cursor=&limit=` | D | D | C-MA | A | C-BS | D | D |
 
-All query paths are under `/api/v1`. `OperationsAgent` uses the request-specific timeline instead of unrestricted audit search. `EventPublisher` accesses only outbox publication storage through its dedicated worker boundary, not these APIs.
+All query paths are under `/api/v1`. `OperationsAgent` uses the request-specific timeline instead of unrestricted audit search. `EventPublisher` accesses only outbox publication storage through its dedicated worker boundary, not these APIs. The exact-attempt WorkflowService projection may include safe active credential-version/expiry and callback-authorization deadline metadata needed for replacement, but never plaintext or a hash.
 
 ## Field-level access
 
@@ -234,7 +238,7 @@ All query paths are under `/api/v1`. `OperationsAgent` uses the request-specific
 | Raw or sanitized errors | Intake-safe issue codes only | O: sanitized | B: sanitized | S: security-safe, never secrets | I: minimize raw payloads | T: sanitized assigned-attempt evidence | Publication errors only |
 | Audit metadata | N | O: request timeline | B: broader operational | S: operational and security | I | N | Outbox delivery metadata only |
 | Machine credential information | N | N | N | M: identity/status/rotation metadata, never secret | Secret configuration only | Own credential through n8n secret storage, never API | Own credential through secret storage, never API |
-| Callback credential information | N | N | N | M: attempt/scope/expiry metadata, never token/hash | Hash and issuance/validation context | T: plaintext once for assigned attempt; never queryable later | N |
+| Callback credential information | N | N | N | M: attempt/scope/expiry metadata, never token/hash | Hash and issuance/validation context | T: plaintext once in the first initial/replacement response for the assigned attempt; never queryable or replayable later | N |
 
 General logs and integration events contain no customer PII. Raw provider payloads are not exposed by default. The mock outbound adapter receives only the approved destination and frozen payload needed to simulate the exact action. n8n receives only exact attempt context, not broad customer, proposal, or audit records.
 
@@ -251,6 +255,7 @@ Errors use the existing [API error envelope](api-contracts.md#error-contract).
 | `403 CALLBACK_FORBIDDEN` | Valid `WorkflowService` identity lacks a valid credential/scope for the exact attempt |
 | `404 RESOURCE_NOT_FOUND` | Used instead of `403` when revealing resource existence would leak protected information |
 | `409` with existing stable code | Caller is authenticated and permitted, but concurrency, idempotency, lifecycle, approval validity, active attempt, result conflict, or retry guard fails |
+| `409 CALLBACK_CREDENTIAL_VERSION_CONFLICT` or `CALLBACK_CREDENTIAL_REPLACEMENT_NOT_ALLOWED` | Replacement expected a stale active version, or the attempt is terminal/expired/ineligible |
 
 Responses never disclose token claims, expected signatures, nonce history, role mappings, callback-token state, hidden resource identity, or security configuration.
 
@@ -265,6 +270,7 @@ Responses never disclose token claims, expected signatures, nonce history, role 
 | Unknown service, invalid HMAC, invalid timestamp | No canonical service attribution | Yes; never log secret/signature/body |
 | Replayed nonce after an otherwise valid service signature | Yes as service-security evidence when identity is safely verified; no business transition | Yes |
 | Invalid callback scope after valid WorkflowService auth | Yes when the attempt can be safely identified; otherwise no aggregate audit | Yes |
+| Callback credential replaced or replacement denied | Yes after trusted WorkflowService identity: attempt ID, old/new safe version metadata or denial code; never plaintext/hash | Yes |
 | Role assigned, changed, or actor disabled | Yes with administrator actor, target actor, old/new role/status, time, reason | Yes |
 | Machine identity rotated or disabled | Yes with administrator actor, service ID/environment, credential version metadata, time; no secret | Yes |
 | Administrator application/security configuration changes | Yes with old/new safe metadata and reason | Yes |

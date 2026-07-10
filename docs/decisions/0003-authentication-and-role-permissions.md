@@ -84,7 +84,7 @@ Rejected for the MVP because it obscures revocation timing. A future cache requi
 - Every protected human request requires an application actor/role lookup.
 - Machine callers must canonicalize requests, synchronize clocks, persist nonces, and rotate secrets safely.
 - Proposal versions require immutable contributor attribution for self-approval checks.
-- Permission and field-projection tests must cover 20 command intents and 13 queries.
+- Permission and field-projection tests must cover 21 command intents and 13 queries.
 - Hiding resource existence can make some authorization failures less descriptive to clients.
 
 ### Follow-up design work

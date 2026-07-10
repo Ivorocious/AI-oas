@@ -117,14 +117,14 @@ The catalog is deliberately smaller than the audit-event catalog. Multiple audit
 
 | Event type | Primary aggregate | Minimum PII-free data |
 | --- | --- | --- |
-| `proposed_action.draft_created` | `ProposedAction` | Action ID, request ID, series ID, action version/state |
+| `proposed_action.draft_created` | `ProposedAction` | Action ID, request ID, series ID, outbound logical operation ID, action version/state |
 | `proposed_action.draft_updated` | `ProposedAction` | Action ID, action version/state, payload digest only |
-| `proposed_action.submitted` | `ProposedAction` | Action ID/version, request ID, frozen digest, state |
-| `proposed_action.superseded` | `ProposedAction` | Old action ID/version, replacement action ID/version, state |
+| `proposed_action.submitted` | `ProposedAction` | Action ID/version, request ID, series/operation IDs, frozen digest, state |
+| `proposed_action.superseded` | `ProposedAction` | Old/replacement action IDs/versions, retained series/operation IDs, state |
 | `approval.approved` | `ProposedAction` | Approval ID, action ID/version/digest, approver actor ID, decision |
 | `approval.rejected` | `ProposedAction` | Approval ID, action ID/version/digest, approver actor ID, decision |
 | `approval.execution_validity_lost` | `ProposedAction` | Approval ID, old action ID/version, replacement action ID |
-| `integration_attempt.created` | `IntegrationAttempt` | Attempt ID/number, operation kind, owner IDs, logical operation ID, adapter/version, state |
+| `integration_attempt.created` | `IntegrationAttempt` | Attempt ID/number, operation kind, owner IDs, logical operation ID, adapter/version, state; outbound adds exact proposal ID/version/digest, approval ID, and stable key reference |
 | `integration_attempt.started` | `IntegrationAttempt` | Attempt ID/number, logical operation ID, state |
 | `integration_attempt.succeeded` | `IntegrationAttempt` | Attempt ID/number, logical operation ID, state, safe result classification |
 | `integration_attempt.retryable_failure` | `IntegrationAttempt` | Attempt ID/number, logical operation ID, state, safe failure code |
@@ -144,7 +144,7 @@ Event names are proposed integration contracts. Existing audit names remain cano
 
 n8n is an orchestrator and event consumer, not an authority. It may react to at-least-once events and request backend commands, but duplicate workflow executions must be safe.
 
-n8n authenticates as `WorkflowService` using the approved HMAC headers. Claim/start commands require exact backend-created attempt assignment, and result callbacks require both HMAC authentication and the additional attempt-scoped callback credential. AI and mock-email providers never call FastAPI directly as canonical actors.
+n8n authenticates as `WorkflowService` using the approved HMAC headers. Claim/start and credential-replacement commands require exact backend-created attempt assignment, and result callbacks require both HMAC authentication and the additional attempt-scoped callback credential. AI and mock-email providers never call FastAPI directly as canonical actors.
 
 ```mermaid
 sequenceDiagram
@@ -174,6 +174,7 @@ sequenceDiagram
 - Request start/retry commands using current expected versions and command idempotency keys.
 - Derive a stable command idempotency key from the triggering `event_id`, command intent, and target so a duplicated event cannot create a different command identity.
 - Claim and start an exact backend-created `Pending` attempt before invoking its adapter.
+- Replace a lost callback credential only for its exact assigned nonterminal attempt using the guarded expected-version command; an idempotent replay never returns plaintext.
 - Invoke an AI or mock outbound adapter only for a backend-created `IntegrationAttempt`.
 - Report success or classified failure evidence to the callback endpoint for that exact attempt.
 - Carry correlation, causation, attempt, adapter, prompt/schema, and provider reference metadata.
@@ -182,6 +183,7 @@ sequenceDiagram
 
 - Insert or update domain, audit, approval, routing, queue, or attempt records directly.
 - Create its own canonical attempt ID, logical operation ID, outbound idempotency key, approval, or proposal version.
+- Create a second outbound operation for a proposal revision or change an attempt's exact proposal/approval/key binding.
 - Report results for an attempt not created and authorized by the backend.
 - Supply arbitrary service-request status, priority, queue, category, routing, approval, retry eligibility, proposal state, or completion state.
 - Treat workflow execution history as canonical audit evidence.
@@ -192,6 +194,8 @@ sequenceDiagram
 ### Attempt-scoped callback contract
 
 When the backend creates an attempt, it returns the attempt ID and an opaque, attempt-scoped callback credential to the trusted workflow context. The credential is bound to that attempt and operation kind, stored by the backend only as a cryptographic hash, and used only with valid `WorkflowService` HMAC authentication as defined in [authentication and authorization](authentication-and-authorization.md#attempt-scoped-callback-authorization). It is never placed in an integration event, audit metadata, provider payload, or workflow log.
+
+If the committed plaintext response is lost, replay returns only safe attempt/credential metadata. The assigned WorkflowService uses the guarded replacement command with a new idempotency key and expected credential version; replacement atomically invalidates the prior version and returns one new plaintext value. Credential replacement is security audit evidence only and emits no integration event because it changes no lifecycle state.
 
 Callback bodies use an allowlisted evidence union:
 

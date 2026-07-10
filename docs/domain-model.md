@@ -201,7 +201,7 @@ Decisions are immutable and versioned. Inputs should use hashes or minimal snaps
 
 ### Purpose and ownership
 
-`ProposedAction` represents one exact version of a proposed customer-facing response or scheduling invitation. It is a lifecycle aggregate associated with one service request. A proposal family is correlated by `proposal_series_id`; one intended side effect is correlated across retries by `logical_operation_id`.
+`ProposedAction` represents one exact version of a proposed customer-facing response or scheduling invitation. It is a lifecycle aggregate associated with one service request. A proposal family is correlated by `proposal_series_id`; one durable outbound `logical_operation_id` identifies that series' intended side effect across every proposal version and retry.
 
 ### Conceptual fields
 
@@ -213,12 +213,13 @@ Decisions are immutable and versioned. Inputs should use hashes or minimal snaps
 ### Relationships and behavior
 
 - One service request can have multiple proposal families and versions, but only an explicitly active version advances toward execution.
+- Draft creation atomically creates one proposal series, one outbound logical operation owned by the same request/series, and the first proposal version. Every later version in that series retains the same required operation reference.
 - An `ApprovalDecision` binds to this record's ID, version, and payload digest.
-- `IntegrationAttempt` records share its `logical_operation_id` and exact approved proposal version.
+- `IntegrationAttempt` records share its `logical_operation_id`, while each outbound attempt immutably stores the exact approved proposal ID/version/digest, approval-decision ID, adapter/version intent, and stable outbound-key identity it executes.
 - Materially changing a `PendingApproval`, `Approved`, or `RetryableExecutionFailure` proposal creates a replacement `Draft`, supersedes the earlier version, and atomically moves the parent request to `ActionRevisionRequired` in `Human review`.
 - The parent request's active-proposal reference moves to the replacement. Any execution recovery target is cleared, and no decision transfers to the replacement.
-- A prior approval and all failed attempts remain immutable historical evidence but cannot authorize the replacement proposal.
-- `Executed` and `TerminalExecutionFailure` proposals cannot be reopened by an ordinary revision command. Terminal recovery would require a separately approved future design.
+- A prior approval and all failed attempts remain immutable historical evidence but cannot authorize the replacement proposal. Material revision reuses the existing operation and never creates another one.
+- A success under any proposal version marks the shared operation successful and blocks every later attempt or revision in the series. `Executed` and `TerminalExecutionFailure` proposals cannot be reopened by an ordinary revision command.
 - Creator and material-editor attribution is append-oriented while a draft changes. Submission freezes the actor UUIDs excluded from approving/rejecting that exact payload; display names and later role changes never alter the guard.
 
 ### History, sensitivity, and authority
@@ -259,14 +260,14 @@ Decisions are append-only and must preserve actor attribution. Rationales may co
 | Requirement | Important fields |
 | --- | --- |
 | Required | `id`, operation kind (`AIInterpretation` or `OutboundAction`), owning `ServiceRequest` ID, `logical_operation_id`, attempt number, adapter name and version, state, created timestamp, optimistic `version` |
-| Conditionally required | Proposed-action ID/version and stable outbound idempotency key for `OutboundAction`; AI input hash plus prompt/schema/provider references for `AIInterpretation` |
+| Conditionally required | Exact proposed-action ID/version, frozen payload digest, approval-decision ID, adapter/version intent, and stable outbound idempotency-key identity for `OutboundAction`; AI input hash plus prompt/schema/provider references for `AIInterpretation` |
 | Optional | Started/completed timestamps, provider correlation/reference, sanitized request/response metadata, produced AI-interpretation ID, failure classification, error code/message, retry eligibility and next-eligible timestamp |
 
 ### Relationships and behavior
 
 - Many attempts can belong to one logical operation, but at most one can be running and at most one attempt can succeed.
 - AI attempts link to the service request and immutable input/version references; a success can create one `AIInterpretation`.
-- Outbound attempts link to the exact proposal version and use the same stable outbound idempotency key so adapter-level deduplication can protect uncertain retries.
+- Outbound attempts link immutably to the exact proposal version/digest and approval they execute and use the operation's same stable outbound idempotency key. A later revision does not rewrite the failed attempt's historical binding.
 - A retry creates the next numbered attempt only when no attempt succeeded, no attempt is active, and the previous failure is retryable. Outbound retry additionally requires approval to remain valid for the exact proposal.
 
 ### History, sensitivity, and authority
@@ -302,7 +303,8 @@ Audit events are append-only and not hard-deleted in the MVP. They store identif
 - A service-request command atomically checks its optimistic version, changes request state and current routing/queue references, and appends audit evidence.
 - Approval atomically creates the immutable decision, advances the exact proposal, updates the service-request summary where applicable, and appends audit evidence.
 - Material revision atomically checks request and proposal versions, authority, proposal family, approval state, and attempt history; supersedes the old proposal; creates and activates the replacement draft; moves the request to `ActionRevisionRequired` and `Human review`; clears obsolete execution recovery data; and appends audit evidence. Any prior approval or attempt remains unchanged. If any guard or write fails, the entire revision rolls back.
-- Attempt creation atomically verifies operation-specific input/version guards and creates one pending attempt with audit evidence. Outbound creation additionally verifies exact approval and side-effect idempotency and advances the proposal summary.
-- Attempt result handling atomically terminalizes the attempt and appends audit evidence. AI success creates the immutable interpretation; outbound results update proposal and service-request summaries.
+- Draft creation atomically creates the proposal series, its outbound logical operation, and the first proposal. Material revision retains that operation ID and cannot create another operation for the series.
+- Attempt creation atomically verifies operation-specific input/version guards and creates one pending attempt with audit evidence. AI start may create its AI operation; outbound creation must use the proposal's existing operation, verify exact approval/side-effect idempotency, and freeze exact execution authorization on the attempt.
+- Attempt result handling atomically terminalizes the attempt and appends audit evidence. AI success creates the immutable interpretation; outbound success updates only the exact bound proposal and request and sets operation success so every later series version is nonexecutable.
 
 Cross-aggregate implementation details remain deferred, but no design may relax these invariants through eventual consistency at the authorization or duplicate-side-effect boundary.
