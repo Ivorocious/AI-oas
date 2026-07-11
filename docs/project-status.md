@@ -2,13 +2,13 @@
 
 ## Current phase
 
-**Phase 1 — Technical Design and Engineering Foundation: underway.**
+**Phase 1 — Technical Design and Engineering Foundation: complete.**
 
-Phase 0 product definition is complete. The domain model, lifecycle state machines, queue behavior, canonical-state boundaries, API/event contracts, fixed authentication/permission model, proposed Postgres persistence/outbox design, and deterministic triage/review policy are now defined. Application implementation has not started.
+Phase 0 product definition is complete. Phase 1 technical design, including the approved failure and recovery policy, is complete. Phase 2 — Executable Foundation is ready to begin, but no implementation task is currently active and application implementation has not started. Remaining detailed decisions will be resolved incrementally within focused implementation tasks rather than blocking the entire executable foundation in advance.
 
 ## Completed work
 
-- Defined immutable failure-policy versions, structured evidence and stable failure codes, exact three-attempt budgets, deterministic AI/outbound delays, proposal-revision behavior, callback replay, stale-attempt assessment, and bounded uncertain-outcome reconciliation in [the failure and recovery policy](failure-and-recovery-policy.md) and [ADR 0006](decisions/0006-failure-retry-and-reconciliation-policy.md).
+- Defined immutable failure-policy versions, structured evidence and stable failure codes, 16 canonical audit reason codes, backend-owned retry eligibility, exact three-attempt AI/outbound budgets, AI delays of 30 seconds and 2 minutes, outbound delays of 1 minute and 5 minutes, proposal-revision behavior, callback replay, stale-attempt assessment, and the 15-minute uncertain-outcome reconciliation deadline in the approved [failure and recovery policy](failure-and-recovery-policy.md) and [ADR 0006](decisions/0006-failure-retry-and-reconciliation-policy.md).
 
 - Defined the Phase 0 business problem, scope, users, lifecycle, approval rules, non-goals, success criteria, risks, and 12 demo scenarios in the [product brief](product-brief.md).
 - Recorded the proposed component responsibilities in the [architecture](architecture.md).
@@ -18,7 +18,7 @@ Phase 0 product definition is complete. The domain model, lifecycle state machin
 - Defined `/api/v1` command/query boundaries, intake outcomes, expected-version and error semantics, command idempotency, guarded n8n callbacks, and read models in the [API contracts](api-contracts.md).
 - Defined PII-minimized event envelopes, at-least-once delivery, aggregate-version ordering, consumer deduplication, transactional-outbox compatibility, and n8n authority limits in the [event contracts](event-contracts.md).
 - Defined Supabase human authentication, fixed human/machine roles, HMAC workflow authentication, attempt-scoped callbacks, separation of duties, all endpoint permissions, field access, auth errors, and security auditing in [authentication and authorization](authentication-and-authorization.md).
-- Defined 26 proposed persistence representations, lifecycle constraints, accepted-intake/command/nonce/callback/outbound idempotency, immutable decision-policy and reviewed-fact evidence, normalized approval attribution, series-owned outbound operations with exact attempt bindings, callback-credential loss recovery, atomic command patterns, canonical audit storage, transactional outbox publication, retention, migration ordering, and future persistence tests in the [persistence design](persistence-design.md).
+- Defined 27 proposed persistence representations, lifecycle constraints, accepted-intake/command/nonce/callback/outbound idempotency, immutable decision and failure-recovery policy evidence, reviewed-fact evidence, normalized approval attribution, series-owned outbound operations with exact attempt bindings, callback-credential loss recovery, atomic command patterns, canonical audit storage, transactional outbox publication, retention, migration ordering, and future persistence tests in the [persistence design](persistence-design.md).
 - Defined stable category wire values, an immutable policy-version model, concrete demonstration thresholds, deterministic category/priority/duplicate/review precedence, bounded reviewed-fact correction, immutable routing decisions, policy-aligned audit/events, atomic triage/review patterns, demo mappings, and future test requirements in the [deterministic triage policy](deterministic-decision-policy.md).
 - Mapped all 12 approved demo scenarios to starting states, commands, guards, final states, queues, audit evidence, and outbound-attempt expectations.
 - Accepted [ADR 0001](decisions/0001-canonical-state-and-lifecycle-boundaries.md) for canonical state and lifecycle boundaries.
@@ -26,17 +26,16 @@ Phase 0 product definition is complete. The domain model, lifecycle state machin
 - Accepted [ADR 0003](decisions/0003-authentication-and-role-permissions.md) for identity, machine authentication, fixed roles, and self-approval prevention.
 - Accepted [ADR 0004](decisions/0004-postgres-persistence-and-transactional-outbox.md) for canonical Postgres persistence, distinct replay protection, immutable attribution, transactional audit/outbox writes, and at-least-once publication.
 - Accepted [ADR 0005](decisions/0005-deterministic-triage-and-review-policy.md) for deterministic backend triage, advisory AI, duplicate candidates, bounded reviewed facts, Urgent review authority, and immutable policy/routing-decision versions.
+- Accepted [ADR 0006](decisions/0006-failure-retry-and-reconciliation-policy.md) for immutable failure policy, bounded retry, callback replay, stale-attempt assessment, and uncertain-outcome reconciliation.
 - Preserved the requirement that the outbound provider is mock-only and sends no real email.
 
 ## Active task
 
-No implementation task is active. Failure and recovery remain approved documentation-only design.
-
-None. The deterministic triage, duplicate-detection, human-review, and reviewed-fact policy task is complete; the next focused Phase 1 task has not started.
+None. Phase 1 is complete. The next focused task is the Phase 2 executable-foundation kickoff.
 
 ## Blockers
 
-None known for the completed design task. Implementation should not begin until the remaining field/schema, policy, integration, and test-design decisions listed below are completed.
+There is no approved design blocker preventing the narrow Phase 2 executable foundation from beginning. Implementation-time details remain intentionally incremental and are not all decided in advance.
 
 ## Approved decisions
 
@@ -71,31 +70,39 @@ None known for the completed design task. Implementation should not begin until 
 - Callback plaintext is hash-only at rest and issued once. Lost delivery is recovered through an exact-attempt WorkflowService replacement command with expected credential version, one active credential, and non-secret idempotent replay.
 - Canonical state, required audit evidence, and immutable outbox messages commit atomically in Postgres; EventPublisher uses leased at-least-once publication and durable one-way attempt history.
 - Postgres enforces structural integrity/uniqueness/basic combinations, while FastAPI retains authorization, lifecycle policy, exact approval, retry eligibility, canonical hashing, redaction, and audit/outbox selection.
+- `FailureRecoveryPolicyVersion` is immutable and deployment-controlled.
+- AI and outbound logical operations have at most three attempts; manual or service retries cannot reset budgets or bypass delays.
+- Material revision does not reset an outbound logical-operation budget.
+- Unknown outbound side effects require reconciliation and cannot be blindly retried.
+- Callback replay is not provider retry and creates no new attempt.
+- Manager/administrator terminal disposition requires rationale; OperationsAgent cannot terminalize.
+- Outbox publisher retry and dead-letter policy remains deferred.
 
-## Technical debt and deferred design
+## Implementation-time decisions and later milestones
 
-The following focused decisions remain before implementation:
+The following matters will be resolved incrementally within focused Phase 2 and later tasks. They do not block the narrow executable-foundation kickoff:
 
 - Exact OpenAPI component schemas, field constraints, generated examples, and contract-test fixtures
 - Supabase project/token configuration, authentication libraries, controlled demo-user setup, and security contract tests
 - Exact SQL types/migrations, encryption, canonical hash specifications, database roles, physical indexes, retention durations, archival jobs, backup/restore, and recovery operations
-- Real-world calibration/governance of the demonstration policy thresholds, reason catalog, and controlled policy activation process
+- Real-world calibration and governance of demonstration policy thresholds and controlled activation
 - Final audit event field schemas, redaction projections, and approved retention durations
-- Failure taxonomy, retry limits/backoff, and uncertain-outcome reconciliation
-- Concrete n8n workflows, event transport, callback implementation, and configured publisher/dead-letter policy
-- AI and outbound adapter interfaces, timeouts, validation, and contract-test strategy
-- Test architecture and executable scenario fixtures for every invariant and demo path
+- Concrete n8n workflows, event transport, callback implementation, and event-publisher retry/dead-letter policy
+- Provider-specific AI and outbound adapter mechanics, timeouts, validation, and contract-test strategy
+- Executable test architecture and scenario fixtures for every invariant and demo path
 - Deployment, environment, observability, and recovery design
 
 ## Known limitations
 
 - The repository contains documentation only; no frontend, backend, database, workflow, integration, automated test, or deployment exists.
 - API, event, security, and persistence contracts are implementation-neutral and do not yet provide executable SQL, final field lengths/types, libraries, Supabase settings, secret storage, or deployed database enforcement.
-- The demonstration policy defines numeric triage and duplicate thresholds; real-world calibration remains deferred. Retry counts, backoff, failure taxonomy, and uncertain-outcome reconciliation remain intentionally undefined.
+- The demonstration policies define triage thresholds, failure taxonomy, retry budgets and delays, stale assessment, and uncertain-outcome reconciliation, but none is implemented. Real-world calibration remains deferred.
 - No real email is sent; only a proposed mock adapter is approved for the MVP.
 - The design targets one demonstration organization, one primary intake path, and modest operational scale.
 - Billing, payments, multi-tenancy, mobile apps, full CRM behavior, autonomous communication, large-scale analytics, numerous real integrations, enterprise authentication, microservices, and Kubernetes remain outside scope.
 
 ## Next milestone
 
-**Phase 1 focused design — failure and recovery policy.** Define provider-failure taxonomy, retry eligibility, retry limits/backoff, terminal disposition, uncertain-outcome reconciliation, and operator recovery boundaries in a separate approved task before application scaffolding.
+**Phase 2 — Executable Foundation.**
+
+The first narrow implementation task will establish the Python/FastAPI project foundation, dependency and configuration setup, an application factory or equivalent startup structure, a health endpoint, a testing foundation, and documentation/status updates. It will not yet implement a domain feature, database migration, authentication, AI, n8n, or frontend behavior.
