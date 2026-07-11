@@ -2,13 +2,13 @@
 
 ## Status and scope
 
-This document defines implementation-neutral integration-event delivery and n8n boundaries for the MVP. It complements the [API contracts](api-contracts.md), [domain model](domain-model.md), [state machines](state-machines.md), [authentication and authorization model](authentication-and-authorization.md), [persistence design](persistence-design.md), and ADRs [0002](decisions/0002-api-command-and-event-boundaries.md), [0003](decisions/0003-authentication-and-role-permissions.md), and [0004](decisions/0004-postgres-persistence-and-transactional-outbox.md). No message broker, transactional outbox, webhook publisher, n8n workflow, callback authentication, or event consumer has been implemented.
+This document defines implementation-neutral integration-event delivery and n8n boundaries for the MVP. It complements the [API contracts](api-contracts.md), [domain model](domain-model.md), [state machines](state-machines.md), [authentication and authorization model](authentication-and-authorization.md), [persistence design](persistence-design.md), [deterministic triage policy](deterministic-decision-policy.md), and ADRs [0002](decisions/0002-api-command-and-event-boundaries.md), [0003](decisions/0003-authentication-and-role-permissions.md), [0004](decisions/0004-postgres-persistence-and-transactional-outbox.md), and [0005](decisions/0005-deterministic-triage-and-review-policy.md). No message broker, transactional outbox, webhook publisher, n8n workflow, callback authentication, or event consumer has been implemented.
 
 ## Record types and authority
 
 | Record/message | Purpose | Canonical? |
 | --- | --- | --- |
-| Domain state | Current lifecycle, priority, queue, approval, proposal, and attempt facts in Postgres | Yes |
+| Domain state | Current category, lifecycle, priority, queue, approval, proposal, and attempt facts in Postgres | Yes |
 | `AuditEvent` | Append-oriented evidence explaining a material command, transition, decision, or failure | Yes |
 | Integration event | PII-minimized delivery message notifying consumers that a canonical fact changed | No; consumers may query the API for current truth |
 | Outbox record | Proposed durable publication work item written with state and audit evidence | No; it supports reliable delivery |
@@ -100,7 +100,7 @@ The catalog is deliberately smaller than the audit-event catalog. Multiple audit
 | `inbound_delivery.accepted` | `InboundDelivery` | Delivery ID, intake outcome, request ID when new/replay |
 | `inbound_delivery.rejected` | `InboundDelivery` | Delivery ID, rejection classification, safe issue codes |
 | `service_request.created` | `ServiceRequest` | Request ID, status |
-| `service_request.triage_completed` | `ServiceRequest` | Request ID, status, priority, queue, routing-decision ID/rule version |
+| `service_request.triage_completed` | `ServiceRequest` | Request ID, category, status, priority, queue, routing-decision ID, policy ID/version |
 | `service_request.human_review_required` | `ServiceRequest` | Request ID, status, queue, stable reason codes |
 | `service_request.duplicate_review_required` | `ServiceRequest` | Request ID, status, queue, candidate IDs |
 | `service_request.ready_for_action` | `ServiceRequest` | Request ID, status, priority, queue |
@@ -111,7 +111,7 @@ The catalog is deliberately smaller than the audit-event catalog. Multiple audit
 | `service_request.terminal_failure` | `ServiceRequest` | Request ID, status, queue, safe reason code |
 | `service_request.completed` | `ServiceRequest` | Request ID, status, logical operation ID |
 | `service_request.closed_duplicate` | `ServiceRequest` | Request ID, status, confirmed target request ID |
-| `service_request.queue_changed` | `ServiceRequest` | Request ID, old/new queue, reason/rule version |
+| `service_request.queue_changed` | `ServiceRequest` | Request ID, old/new queue, stable reason codes, policy ID/version when policy-caused |
 
 ### Proposal, approval, and attempt events
 
@@ -130,7 +130,9 @@ The catalog is deliberately smaller than the audit-event catalog. Multiple audit
 | `integration_attempt.retryable_failure` | `IntegrationAttempt` | Attempt ID/number, logical operation ID, state, safe failure code |
 | `integration_attempt.terminal_failure` | `IntegrationAttempt` | Attempt ID/number, logical operation ID, state, safe failure code |
 
-Event names are proposed integration contracts. Existing audit names remain canonical evidence conventions and need not map one-to-one.
+Event names are proposed integration contracts. The canonical triage audit facts—routing decision creation/recalculation, candidate creation, required review, reviewed facts, incomplete review, completion, and queue change—are defined in the [deterministic triage policy](deterministic-decision-policy.md#api-permission-audit-and-integration-event-alignment). They need not map one-to-one to integration events, and no integration event contains full decision inputs, customer text, duplicate evidence, or reviewed rationale.
+
+An accepted reviewed-fact command always creates canonical `reviewed_facts.recorded`, `routing_decision.recalculated`, and either `service_request.human_review_completed` or `service_request.human_review_incomplete` audit evidence. `service_request.queue_changed` is added only when the wire-value queue actually changes. If an incomplete recalculation leaves the consumer-facing status and queue at `HumanReview`, no integration event is emitted solely for the new internal decision; authorized consumers obtain the new decision through the API. Policy-caused queue audit/events reference policy ID/version/digest, while lifecycle-only queue changes carry their lifecycle reason without claiming a routing recalculation.
 
 ## Event schema evolution
 

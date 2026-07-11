@@ -4,7 +4,7 @@
 
 The AI Operations Automation Suite is a portfolio-grade operations platform for a general service business. It coordinates customer service requests from intake through validation, persistence, AI-assisted interpretation, deterministic routing, human approval, workflow automation, and operational follow-up. The product is configurable across service companies and is not tied to one industry.
 
-This brief is the approved product source of truth for the MVP. The corresponding [architecture](architecture.md) is proposed and has not been implemented.
+This brief is the approved product source of truth for the MVP. The corresponding [architecture](architecture.md) and [deterministic triage policy](deterministic-decision-policy.md) are proposed and have not been implemented.
 
 ## Business problem
 
@@ -19,9 +19,9 @@ The MVP will demonstrate a controlled operating flow in which AI helps interpret
 | Customer | Submit a service request, provide requested details, and receive an approved response or scheduling invitation. |
 | Operations agent (`OperationsAgent`) | Monitor queues, investigate incomplete or ambiguous requests, resolve likely duplicates, prepare or review proposed actions, retry failed work, and submit customer-facing actions for approval. |
 | Manager/approver (`ManagerApprover`) | Review urgent or exceptional cases and approve or reject proposed customer-facing actions. |
-| Administrator (`Administrator`) | Configure categories, confidence thresholds, routing rules, adapters, access, and operational settings; investigate audit and integration records. |
+| Administrator (`Administrator`) | Govern controlled policy activation, adapters, access, and operational settings; investigate audit and integration records. The initial policy is deployment-controlled, not a runtime configuration UI. |
 
-Operations agents cannot approve or reject customer-facing actions. A `ManagerApprover` or `Administrator` must decide the exact proposal, and the approver cannot be a creator or material reviser of that proposal. Urgent review also requires manager or administrator authority. The fixed MVP policy is defined in [authentication and authorization](authentication-and-authorization.md).
+Operations agents cannot approve or reject customer-facing actions. A `ManagerApprover` or `Administrator` must decide the exact proposal, and the approver cannot be a creator or material reviser of that proposal. Urgent review also requires manager or administrator authority. The fixed MVP decision policy is defined in the [deterministic triage policy](deterministic-decision-policy.md); identity and permission enforcement is defined in [authentication and authorization](authentication-and-authorization.md).
 
 ## Primary request lifecycle
 
@@ -32,7 +32,7 @@ The product has one primary operational lifecycle:
 3. Idempotency protection prevents a repeated webhook delivery from being processed twice.
 4. The system checks for likely duplicate contacts or requests and flags candidates; it does not silently merge them.
 5. A replaceable AI provider produces a structured summary, suggested category, missing-information list, and confidence value.
-6. Backend rules—not the AI model—calculate priority, routing, and required review from validated inputs and configuration.
+6. Backend rules—not the AI model—apply a versioned deterministic policy to calculate final category, priority, routing, and required review from validated inputs.
 7. The request enters the appropriate operational queue.
 8. Urgent, ambiguous, incomplete, low-confidence, or possible-duplicate cases wait for human review.
 9. The system prepares a proposed customer response and scheduling invitation.
@@ -60,14 +60,7 @@ Failures remain visible and recoverable: provider failures route work for review
 
 ## Initial service categories
 
-The categories are configurable starting values:
-
-- Consultation
-- Installation
-- Repair
-- Routine maintenance
-- Inspection
-- Other/custom request
+The initial categories are configurable through controlled policy versions. Their stable wire values are defined in the [deterministic triage policy](deterministic-decision-policy.md): `Consultation`, `Installation`, `Repair`, `RoutineMaintenance`, `Inspection`, and `OtherCustomRequest`. Display labels remain Consultation, Installation, Repair, Routine maintenance, Inspection, and Other/custom request.
 
 ## Priority levels and operational queues
 
@@ -78,9 +71,9 @@ Priority is a business-rule result, independent from the queue that represents c
 | Low | Non-urgent work with flexible timing and limited operational impact. |
 | Normal | Complete, routine requests handled through the standard flow. |
 | High | Time-sensitive or materially impactful work needing faster attention. |
-| Urgent | Immediate or safety/continuity-sensitive work that always requires human approval. |
+| Urgent | Immediate or safety/continuity-sensitive work that always requires manager or administrator human review before action preparation. |
 
-| Queue | Entry condition or purpose |
+| Queue display label | Entry condition or purpose |
 | --- | --- |
 | Invalid submissions | Input fails the intake contract and cannot enter normal processing. |
 | Standard requests | Valid Low or Normal requests with no exception requiring review. |
@@ -88,6 +81,8 @@ Priority is a business-rule result, independent from the queue that represents c
 | Human review | Urgent, ambiguous, incomplete, or low-confidence requests and other policy exceptions. |
 | Duplicate review | A likely duplicate contact or request needs a human resolution. |
 | Failed/retry required | A provider, workflow, or integration attempt failed and requires controlled recovery. |
+
+This product-facing table and the demo scenarios below use display labels. Technical contracts use the stable queue wire values defined in the [API contracts](api-contracts.md#initial-wire-enums).
 
 ## Human-approval rules
 
@@ -147,7 +142,7 @@ Phase 0 defines success for the future MVP as follows:
 ## Assumptions
 
 - The MVP serves one demonstration organization and one primary intake channel.
-- Service categories, confidence thresholds, priority criteria, and routing rules are configurable but begin with a small approved set.
+- Service categories, confidence thresholds, priority criteria, duplicate rules, and routing rules are versioned policy inputs that begin with a small approved set and are deployment-controlled in the MVP.
 - Customer input may be free-form, but the persisted request uses a stable normalized schema.
 - Duplicate detection produces candidates and confidence or reason signals; humans decide ambiguous matches.
 - Users are identified sufficiently to attribute approvals and administrative changes, although enterprise authentication is out of scope.

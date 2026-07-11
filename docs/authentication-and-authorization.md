@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the fixed MVP identity, authentication, and authorization model for the [API contracts](api-contracts.md), [event/n8n contracts](event-contracts.md), and approved [lifecycle state machines](state-machines.md). It is an accepted technical design under [ADR 0003](decisions/0003-authentication-and-role-permissions.md), with proposed security-record storage in the [persistence design](persistence-design.md). It is not implemented functionality: no Supabase Auth configuration, middleware, role table, seed user, secret, nonce store, callback credential, migration, or application code exists.
+This document defines the fixed MVP identity, authentication, and authorization model for the [API contracts](api-contracts.md), [event/n8n contracts](event-contracts.md), approved [lifecycle state machines](state-machines.md), and [deterministic triage policy](deterministic-decision-policy.md). It is an accepted technical design under [ADR 0003](decisions/0003-authentication-and-role-permissions.md), with proposed security-record storage in the [persistence design](persistence-design.md). It is not implemented functionality: no Supabase Auth configuration, middleware, role table, seed user, secret, nonce store, callback credential, migration, or application code exists.
 
 The MVP serves one demonstration organization. It uses fixed roles and a centralized permission map rather than editable policies or enterprise RBAC.
 
@@ -149,7 +149,7 @@ A material revision creates a new proposal version and attribution set. Prior ap
 
 | Code | Additional condition |
 | --- | --- |
-| `NU` | `OperationsAgent` may complete only non-Urgent review; current priority and review reason are backend facts. |
+| `NU` | `OperationsAgent` may complete only non-Urgent review when both current and recalculated policy priority are non-Urgent. Hard safety/continuity reduction is manager/admin-only and needs an explicit reviewed fact and rationale. |
 | `AP` | `ManagerApprover` or `Administrator` may decide only an exact pending proposal when their actor UUID is absent from `approval_excluded_actor_ids`. |
 | `RT` | Human retry is limited to an allowed retryable AI/outbound failure with no active/successful sibling and valid approval when outbound. |
 | `TM` | Manager/administrator may terminalize only retryable work and must provide the required rationale. |

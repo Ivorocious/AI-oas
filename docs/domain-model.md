@@ -2,9 +2,9 @@
 
 ## Status and scope
 
-This document defines the approved, implementation-neutral domain model for the MVP. It refines the [product brief](product-brief.md), [proposed architecture](architecture.md), and [lifecycle state machines](state-machines.md); the proposed relational representation is defined separately in the [persistence design](persistence-design.md). No database schema, migration, ORM model, API, or application component has been implemented.
+This document defines the approved, implementation-neutral domain model for the MVP. It refines the [product brief](product-brief.md), [proposed architecture](architecture.md), [lifecycle state machines](state-machines.md), and [deterministic triage policy](deterministic-decision-policy.md); the proposed relational representation is defined separately in the [persistence design](persistence-design.md). No database schema, migration, ORM model, API, or application component has been implemented.
 
-All approved concept names are retained. The model introduces no additional business entity; `proposal_series_id` preserves proposal identity across versions, while the persistence design gives `logical_operation_id` a durable support record so attempt and outbound-idempotency invariants can be enforced across retries.
+All approved concept names are retained. `proposal_series_id` preserves proposal identity across versions, while the persistence design gives `logical_operation_id` a durable support record so attempt and outbound-idempotency invariants can be enforced across retries. `ReviewedFactSet` is an explicitly bounded evidence child for deterministic recalculation, not a new generic business workflow or override entity.
 
 ## Model-wide conventions
 
@@ -13,7 +13,8 @@ All approved concept names are retained. The model introduces no additional busi
 - Supabase Postgres is the proposed canonical operational store.
 - Only authorized FastAPI backend commands may create or change canonical lifecycle state. The frontend and n8n may request commands but cannot write authoritative state independently.
 - Mutable aggregate roots carry an optimistic `version` value. A command supplies the version it observed and fails with a concurrency conflict if a newer version exists.
-- Historical records retain the applicable rule, schema, prompt, and adapter version references required to explain outcomes.
+- Historical records retain applicable policy ID/version/digest, schema, prompt, and adapter version references required to explain outcomes.
+- The stable service-category wire values are `Consultation`, `Installation`, `Repair`, `RoutineMaintenance`, `Inspection`, and `OtherCustomRequest`.
 - Operational and audit records are not hard-deleted in the MVP. Corrections use new versions, resolution facts, or audit events.
 - Raw or normalized customer data is retained only when required for operations or evidence. Secrets never belong in domain records, and logs or audit metadata must be sanitized.
 
@@ -29,6 +30,8 @@ flowchart TB
     DC -->|"compares with"| C
     DC -->|"compares with"| SR2["candidate ServiceRequest"]
     SR --> RD["RoutingDecision versions"]
+    DP["DecisionPolicyVersion"] --> RD
+    RF["ReviewedFactSet"] --> RD
     SR --> PA["ProposedAction versions"]
     SR -->|"AI provider calls"| IA["IntegrationAttempt records"]
     PA --> AD["ApprovalDecision"]
@@ -46,13 +49,14 @@ The arrows describe conceptual relationships, not foreign-key or aggregate imple
 | Concept | Question answered | Source of authority |
 | --- | --- | --- |
 | Service-request status | What lifecycle checkpoint has the request reached? | Backend state-machine command |
-| Priority | How quickly or importantly should the request be handled? | Current versioned `RoutingDecision` produced by deterministic backend rules |
+| Category | What general service need is represented? | Current versioned `RoutingDecision` produced by deterministic backend policy from normalized/reviewed facts |
+| Priority | How quickly or importantly should the request be handled? | Current versioned `RoutingDecision` produced by deterministic backend policy |
 | Operational queue | Which operator view currently owns attention? | Backend-controlled queue assignment derived from status, priority, review flags, and failure state |
 | Proposed-action state | What is the state of one exact proposal version? | Proposed-action state machine |
 | Approval | Did an authorized person approve or reject that exact proposal version? | Immutable `ApprovalDecision` plus validity guards |
 | Integration-attempt state | What happened during one provider invocation? | Integration-attempt state machine and adapter result |
 
-These values may change together in one backend transaction, but they are not aliases. For example, an Urgent priority request can be in Human review, Awaiting approval, or Failed/retry required at different times.
+These values may change together in one backend transaction, but they are not aliases. For example, an Urgent priority request can be in `HumanReview`, `AwaitingApproval`, or `FailedRetryRequired` at different times.
 
 ## `InboundDelivery`
 
@@ -130,7 +134,7 @@ The normalized description and context can contain sensitive or safety-relevant 
 
 ### Purpose and ownership
 
-`AIInterpretation` stores one advisory, structured AI result for a service request. It is an immutable versioned child of `ServiceRequest` and never carries authority to change priority, queue, approval, or lifecycle state.
+`AIInterpretation` stores one advisory, structured AI result for a service request. It is an immutable versioned child of `ServiceRequest` and never carries authority to change final category, priority, queue, approval, or lifecycle state.
 
 ### Conceptual fields
 
@@ -160,14 +164,14 @@ Interpretations are immutable. A rerun creates a new version. Summaries may repr
 
 | Requirement | Important fields |
 | --- | --- |
-| Required | `id`, source `ServiceRequest` ID, candidate type and candidate ID, detection reason(s), detection method/rule version, detected timestamp, resolution status |
-| Optional | Match score or confidence, resolver actor, resolution reason, resolved timestamp, superseding request/contact reference |
+| Required | `id`, source `ServiceRequest` ID, candidate type and candidate ID, detection reason(s), policy ID/version/digest, source/candidate evidence hashes, detected timestamp, resolution status |
+| Optional | Deterministic match score, resolver actor, resolution reason, resolved timestamp, stale/superseding observation reference |
 
 ### Relationships and behavior
 
 - It points from one source request to a candidate `ServiceRequest` or `Contact`.
 - Multiple candidates can exist for one request.
-- Resolution is explicit: confirmed duplicate, not duplicate, or still pending. A confirmed duplicate can close the source request without deleting or silently merging it.
+- Resolution is explicit: confirmed duplicate, not duplicate, or still pending. A stale observation no longer routes review but remains historical. A confirmed duplicate can close the source request without deleting or silently merging it.
 
 ### History, sensitivity, and authority
 
@@ -177,25 +181,49 @@ Detection evidence is immutable; resolution fields are written once by an author
 
 ### Purpose and ownership
 
-`RoutingDecision` is the reproducible output of deterministic backend rules for final category, priority, operational queue, and review requirements at a point in time. It is an immutable versioned child of `ServiceRequest`.
+`RoutingDecision` is the reproducible output of one immutable deterministic policy for final category, priority, status, operational queue, and review requirements at a point in time. It is an immutable versioned child of `ServiceRequest`.
 
 ### Conceptual fields
 
 | Requirement | Important fields |
 | --- | --- |
-| Required | `id`, `ServiceRequest` ID, decision version, normalized input snapshot/hash, rule-set version, final priority, operational queue, review-required flags and reasons, decided timestamp |
-| Optional | AI-interpretation ID, duplicate-candidate references, final category, prior decision ID, operator override actor/reason and governing policy reference |
+| Required | `id`, `ServiceRequest` ID, decision version, policy ID/semantic version/revision/digest, normalized input snapshot/hash, evaluation timestamp, final category, final priority, final status, operational queue, review-required boolean, ordered review/category/priority reason codes, decision source, decided timestamp |
+| Optional | AI-interpretation ID/version, AI-confidence value, missing-information codes, ordered duplicate-candidate observation references, prior decision ID, reviewed-fact set ID, reviewed actor UUID, and reviewed rationale reference |
 
 ### Relationships and behavior
 
-- It records exactly which request, AI, duplicate, and configuration evidence produced the decision.
+- It records exactly which request, AI, duplicate, reviewed-fact, policy, and configuration evidence produced the decision.
 - The request points to its current decision; older decisions remain historical.
 - A routing decision records the initial or recalculated operational queue. Later queue movement caused solely by lifecycle progress follows backend transition policy and audit evidence without requiring a fabricated routing recalculation.
-- A permitted human override is still a backend rule path and records actor, reason, and policy—not a direct UI field edit.
+- Reviewed facts are bounded evidence. They cause a new deterministic calculation and never directly patch a category, priority, status, queue, or approval output.
 
 ### History, sensitivity, and authority
 
-Decisions are immutable and versioned. Inputs should use hashes or minimal snapshots to avoid duplicating customer data. Only deterministic backend policy code creates a routing decision and atomically updates the request's current priority/queue plus audit evidence.
+Decisions are immutable and versioned. Inputs should use hashes or minimal snapshots to avoid duplicating customer data. Only deterministic backend policy code creates a routing decision and atomically updates the request's current category, priority, status, queue, and routing reference plus audit evidence.
+
+## `ReviewedFactSet`
+
+### Purpose and ownership
+
+`ReviewedFactSet` is the immutable, allowlisted evidence accepted through `CompleteHumanReview`. It belongs to the source `ServiceRequest` and is an input to a later `RoutingDecision`; it is not a generic mutable override object.
+
+### Conceptual fields
+
+| Requirement | Important fields |
+| --- | --- |
+| Required | `id`, `ServiceRequest` ID, reviewed actor UUID, addressed review codes, required rationale reference, supporting-evidence references, created timestamp, and reviewed-fact schema version |
+| Optional by fact type | Corrected category, custom-scope confirmation, resolved missing-information references, timing/deadline, material-impact, interruption, damage/deterioration, safety/continuity, and urgent-review disposition |
+
+### Relationships and behavior
+
+- A set is immutable once accepted and may be referenced by one or more historical decisions, although a new calculation normally references the set it just accepted.
+- The actor and rationale are immutable even if roles or display names later change.
+- A reviewed fact can satisfy only an allowlisted policy input. It cannot resolve a duplicate, bypass required information, approve a proposal, or select a lifecycle or queue output.
+- Every command that accepts a reviewed-fact set creates a complete new `RoutingDecision`, updates the request's current decision/category/priority/review summary/status/queue, and increments its optimistic version even when review remains required and status/queue values are unchanged.
+
+### History, sensitivity, and authority
+
+Rationales and evidence references are restricted operational data. The backend validates actor authority and fact shape before insertion, including the manager/admin rule for Urgent or hard safety/continuity corrections. A non-ready result can retain the fact set and audit evidence while keeping the request in review.
 
 ## `ProposedAction`
 
@@ -216,7 +244,7 @@ Decisions are immutable and versioned. Inputs should use hashes or minimal snaps
 - Draft creation atomically creates one proposal series, one outbound logical operation owned by the same request/series, and the first proposal version. Every later version in that series retains the same required operation reference.
 - An `ApprovalDecision` binds to this record's ID, version, and payload digest.
 - `IntegrationAttempt` records share its `logical_operation_id`, while each outbound attempt immutably stores the exact approved proposal ID/version/digest, approval-decision ID, adapter/version intent, and stable outbound-key identity it executes.
-- Materially changing a `PendingApproval`, `Approved`, or `RetryableExecutionFailure` proposal creates a replacement `Draft`, supersedes the earlier version, and atomically moves the parent request to `ActionRevisionRequired` in `Human review`.
+- Materially changing a `PendingApproval`, `Approved`, or `RetryableExecutionFailure` proposal creates a replacement `Draft`, supersedes the earlier version, and atomically moves the parent request to `ActionRevisionRequired` in `HumanReview`.
 - The parent request's active-proposal reference moves to the replacement. Any execution recovery target is cleared, and no decision transfers to the replacement.
 - A prior approval and all failed attempts remain immutable historical evidence but cannot authorize the replacement proposal. Material revision reuses the existing operation and never creates another one.
 - A success under any proposal version marks the shared operation successful and blocks every later attempt or revision in the series. `Executed` and `TerminalExecutionFailure` proposals cannot be reopened by an ordinary revision command.
@@ -302,7 +330,7 @@ Audit events are append-only and not hard-deleted in the MVP. They store identif
 - Intake acceptance atomically finalizes the new `InboundDelivery`, creates the initial `ServiceRequest` when valid and new, and writes audit events. Contact creation or association participates when the selected persistence design can preserve the same invariant.
 - A service-request command atomically checks its optimistic version, changes request state and current routing/queue references, and appends audit evidence.
 - Approval atomically creates the immutable decision, advances the exact proposal, updates the service-request summary where applicable, and appends audit evidence.
-- Material revision atomically checks request and proposal versions, authority, proposal family, approval state, and attempt history; supersedes the old proposal; creates and activates the replacement draft; moves the request to `ActionRevisionRequired` and `Human review`; clears obsolete execution recovery data; and appends audit evidence. Any prior approval or attempt remains unchanged. If any guard or write fails, the entire revision rolls back.
+- Material revision atomically checks request and proposal versions, authority, proposal family, approval state, and attempt history; supersedes the old proposal; creates and activates the replacement draft; moves the request to `ActionRevisionRequired` and `HumanReview`; clears obsolete execution recovery data; and appends audit evidence. Any prior approval or attempt remains unchanged. If any guard or write fails, the entire revision rolls back.
 - Draft creation atomically creates the proposal series, its outbound logical operation, and the first proposal. Material revision retains that operation ID and cannot create another operation for the series.
 - Attempt creation atomically verifies operation-specific input/version guards and creates one pending attempt with audit evidence. AI start may create its AI operation; outbound creation must use the proposal's existing operation, verify exact approval/side-effect idempotency, and freeze exact execution authorization on the attempt.
 - Attempt result handling atomically terminalizes the attempt and appends audit evidence. AI success creates the immutable interpretation; outbound success updates only the exact bound proposal and request and sets operation success so every later series version is nonexecutable.

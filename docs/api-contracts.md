@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines implementation-neutral HTTP contracts for the MVP. It applies the approved [domain model](domain-model.md), [lifecycle state machines](state-machines.md), [event contracts](event-contracts.md), [authentication and authorization model](authentication-and-authorization.md), [persistence design](persistence-design.md), and ADRs [0002](decisions/0002-api-command-and-event-boundaries.md), [0003](decisions/0003-authentication-and-role-permissions.md), and [0004](decisions/0004-postgres-persistence-and-transactional-outbox.md). No API, route, authentication middleware, database schema/migration, or workflow has been implemented.
+This document defines implementation-neutral HTTP contracts for the MVP. It applies the approved [domain model](domain-model.md), [lifecycle state machines](state-machines.md), [event contracts](event-contracts.md), [authentication and authorization model](authentication-and-authorization.md), [persistence design](persistence-design.md), [deterministic triage policy](deterministic-decision-policy.md), and ADRs [0002](decisions/0002-api-command-and-event-boundaries.md), [0003](decisions/0003-authentication-and-role-permissions.md), [0004](decisions/0004-postgres-persistence-and-transactional-outbox.md), and [0005](decisions/0005-deterministic-triage-and-review-policy.md). No API, route, authentication middleware, database schema/migration, or workflow has been implemented.
 
 The proposed prefix is `/api/v1`. Commands may change canonical state; queries are read-only. FastAPI is the only authoritative command boundary. The frontend and n8n call these contracts and never write canonical database state directly.
 
@@ -22,6 +22,7 @@ The proposed prefix is `/api/v1`. Commands may change canonical state; queries a
 | Concept | Stable values |
 | --- | --- |
 | Service-request status | `TriagePending`, `HumanReview`, `DuplicateReview`, `ReadyForAction`, `AwaitingApproval`, `ActionRevisionRequired`, `ActionPendingExecution`, `RetryableFailure`, `Completed`, `TerminalFailure`, `ClosedDuplicate` |
+| Service category | `Consultation`, `Installation`, `Repair`, `RoutineMaintenance`, `Inspection`, `OtherCustomRequest` |
 | Priority | `Low`, `Normal`, `High`, `Urgent` |
 | Operational queue | `InvalidSubmissions`, `StandardRequests`, `PriorityRequests`, `HumanReview`, `DuplicateReview`, `FailedRetryRequired` |
 | Proposed-action state | `Draft`, `PendingApproval`, `Approved`, `Rejected`, `Superseded`, `PendingExecution`, `Executed`, `RetryableExecutionFailure`, `TerminalExecutionFailure` |
@@ -133,13 +134,13 @@ Common rules apply to every row: meaningful backend commands enforce the [state-
 | Intent and endpoint | Request information and expected versions | Guard and authority | Idempotency and response |
 | --- | --- | --- | --- |
 | Start AI interpretation — `POST /api/v1/service-requests/{request_id}/commands/start-ai-interpretation` | Expected `service_request`; optional backend-known interpretation configuration reference, not prompt text | Request `TriagePending`; no active/successful attempt for the same input/configuration; `BackendService` or constrained `WorkflowService`; backend creates the AI operation and attempt | Command key required; `202 Accepted` with attempt/operation IDs, credential version/expiry, request/attempt versions; plaintext appears once only in the assigned WorkflowService projection |
-| Complete deterministic triage — `POST /api/v1/service-requests/{request_id}/commands/complete-triage` | Expected `service_request`; references to current stored interpretation and duplicate-check evidence | Request `TriagePending`; evidence current; `BackendService` deterministic rules calculate category, priority, queue, and review need | Command key required; `200 OK` with routing-decision ID, status, priority, queue, request version |
+| Complete deterministic triage — `POST /api/v1/service-requests/{request_id}/commands/complete-triage` | Expected `service_request`; references only to current stored interpretation and duplicate evidence; optional expected policy identity | Request `TriagePending`; validated evidence and selected policy current; `BackendService` deterministically creates candidates and calculates final category, priority, status, queue, and review codes | Command key required; `200 OK` with routing-decision ID, policy ID/version/digest, category, priority, status, queue, ordered review codes, and request version |
 | Resolve duplicate — `POST /api/v1/service-requests/{request_id}/duplicate-candidates/{candidate_id}/commands/resolve` | Expected `service_request`; decision `ConfirmedDuplicate` or `NotDuplicate`; rationale when policy requires | Request `DuplicateReview`; candidate unresolved/current; `OperationsAgent`, `ManagerApprover`, or `Administrator` | Command key required; `200 OK` with candidate resolution, request status/queue/version |
-| Complete human review — `POST /api/v1/service-requests/{request_id}/commands/complete-human-review` | Expected `service_request`; references to resolved information/evidence and optional sanitized note | Request `HumanReview`; all required items resolved; `OperationsAgent` only when non-Urgent, otherwise `ManagerApprover` or `Administrator` | Command key required; `200 OK` with request status/queue/version |
+| Complete human review — `POST /api/v1/service-requests/{request_id}/commands/complete-human-review` | Expected `service_request` and optional expected policy identity; at least one allowlisted reviewed fact, addressed review codes, required rationale, and supporting-evidence references; no note-only body | Request `HumanReview`; current interpretation/duplicate evidence/policy; no pending duplicate; backend always recalculates from immutable reviewed facts. `OperationsAgent` only when current and recalculated priority are non-Urgent; `ManagerApprover` or `Administrator` when Urgent or correcting hard safety/continuity facts | Command key required; `200 OK` always includes new routing-decision ID and incremented request version. Incomplete result remains `HumanReview`/`HumanReview`, has `review_required=true`, and returns the complete outstanding codes |
 | Retry AI processing — `POST /api/v1/service-requests/{request_id}/commands/retry-ai` | Expected `service_request`; failed AI attempt ID | Request `RetryableFailure` targeting `TriagePending`; attempt retryable; no active/successful sibling; allowed human role, `BackendService`, or constrained `WorkflowService` | Command key required; `202 Accepted` with request `TriagePending`, new `Pending` attempt under the same AI logical operation, credential version/expiry, and updated versions; plaintext appears once only in the assigned WorkflowService projection |
 | Mark retryable work terminal — `POST /api/v1/service-requests/{request_id}/commands/mark-terminal-failure` | Expected `service_request`; expected `proposed_action` when failure is outbound; required rationale and failed attempt/reference | Request `RetryableFailure`; `ManagerApprover` or `Administrator`; terminal disposition or policy exhaustion | Command key required; `200 OK` with request `TerminalFailure`, related proposal state when applicable, queue, versions |
 
-Command bodies may select evidence or record a human disposition; they cannot submit final priority, queue, routing, or arbitrary next status.
+Command bodies may select evidence or record a bounded human disposition; they cannot submit final category, final priority, queue, routing output, arbitrary next status, approval state, duplicate resolution outside its dedicated command, or retry eligibility.
 
 ### Proposal and approval
 
@@ -153,7 +154,7 @@ Command bodies may select evidence or record a human disposition; they cannot su
 | Create material revision — `POST /api/v1/proposed-actions/{action_id}/commands/create-material-revision` | Expected `service_request` and `proposed_action`; replacement draft content | Source/request pair must match an allowed revision path; no active/successful attempt or successful operation; authorized operations actor. Backend requires and preserves the same request, proposal series, and existing outbound logical operation; it creates no operation | Command key required; `201 Created` with old `Superseded` or historical `Rejected`, replacement `Draft`, unchanged logical operation ID, request `ActionRevisionRequired`, cleared recovery marker when applicable, versions; no approval transfer |
 | Submit replacement — `POST /api/v1/proposed-actions/{replacement_id}/commands/submit-for-approval` | Expected `service_request` and replacement `proposed_action`; same contract as submission | Active replacement is `Draft`, same request/series, current versions; authorized operations actor | Command key required; `200 OK` with replacement `PendingApproval`, request `AwaitingApproval`, frozen digest, versions; new decision required |
 
-There are no generic `PATCH` endpoints for request status, queue, priority, approval state, or execution state.
+There are no generic `PATCH` endpoints for request category, status, queue, priority, approval state, or execution state.
 
 ### Outbound execution
 
@@ -176,7 +177,7 @@ Callbacks report evidence for backend-created attempts. They are commands, not d
 | Record retryable failure — `POST /api/v1/integration-attempts/{attempt_id}/callbacks/retryable-failure` | Expected `integration_attempt`; stable failure classification/code, sanitized evidence, adapter version | Same `WorkflowService` HMAC and exact attempt-scoped credential; same attempt ownership/current-state guards; backend owns retry eligibility and parent transition | Same-result replay safe; `200 OK` with attempt `RetryableFailure` and backend-derived request/proposal summary |
 | Record terminal failure — `POST /api/v1/integration-attempts/{attempt_id}/callbacks/terminal-failure` | Expected `integration_attempt`; stable failure classification/code, sanitized evidence, adapter version | Same `WorkflowService` HMAC and exact attempt-scoped credential; same ownership/current-state guards; classification must satisfy terminal policy | Same-result replay safe; `200 OK` with attempt `TerminalFailure` and backend-derived request/proposal summary |
 
-Callbacks reject fields that attempt to set service-request status, priority, queue, routing, approval, proposal state, retry eligibility, or arbitrary aggregate IDs. Credential replacement likewise cannot start/retry an attempt, invoke a provider, or change owner state/scope. An unknown or unauthorized attempt returns `404 ATTEMPT_NOT_FOUND` or `403 CALLBACK_FORBIDDEN`. A different result after terminalization returns `409 INTEGRATION_RESULT_CONFLICT`.
+Callbacks reject fields that attempt to set service-request category, status, priority, queue, routing, approval, proposal state, retry eligibility, or arbitrary aggregate IDs. Credential replacement likewise cannot start/retry an attempt, invoke a provider, or change owner state/scope. An unknown or unauthorized attempt returns `404 ATTEMPT_NOT_FOUND` or `403 CALLBACK_FORBIDDEN`. A different result after terminalization returns `409 INTEGRATION_RESULT_CONFLICT`.
 
 ## Query catalog
 
@@ -184,13 +185,13 @@ Queries never change state and do not require expected versions or idempotency k
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /api/v1/service-requests/{request_id}` | Current request summary, status, priority, queue, active references, and aggregate version |
+| `GET /api/v1/service-requests/{request_id}` | Current request summary, category, status, priority, queue, active references, and aggregate version |
 | `GET /api/v1/service-requests?queue=&priority=&status=&cursor=&limit=` | Cursor-paginated operational views using backend-owned filters |
 | `GET /api/v1/inbound-deliveries/{delivery_id}` | Inspect accepted, replayed, rejected, conflicted, or failed delivery evidence |
 | `GET /api/v1/service-requests/{request_id}/timeline` | Authorized combined lifecycle and audit projection |
 | `GET /api/v1/service-requests/{request_id}/ai-interpretations` | Versioned advisory interpretations and safe metadata |
 | `GET /api/v1/service-requests/{request_id}/duplicate-candidates` | Candidate evidence and resolution state |
-| `GET /api/v1/service-requests/{request_id}/routing-decisions` | Versioned deterministic decisions and rule references |
+| `GET /api/v1/service-requests/{request_id}/routing-decisions` | Versioned deterministic decisions with policy ID/version/digest references |
 | `GET /api/v1/service-requests/{request_id}/proposed-actions` | Proposal series, versions, states, and active marker |
 | `GET /api/v1/proposed-actions/{action_id}` | Exact proposal version, digest, state, approval validity summary, and version |
 | `GET /api/v1/proposed-actions/{action_id}/approvals` | Immutable decisions for the exact proposal version |
@@ -205,11 +206,11 @@ List responses use opaque cursor pagination and return `next_cursor` when more r
 | # | Approved scenario | Primary API path and result | Minimum event/audit evidence |
 | --- | --- | --- | --- |
 | 1 | Valid standard request | Intake `201`; start AI, record success, complete triage; request query returns `ReadyForAction`, Low/Normal, `StandardRequests` | Delivery accepted, request created, attempt/interpretation, routing and triage events |
-| 2 | High-priority request | Same commands; deterministic triage response returns High and `PriorityRequests` | Routing rule/version and queue change |
+| 2 | High-priority request | Same commands; deterministic triage response returns High and `PriorityRequests` | Routing policy identity and queue change |
 | 3 | Urgent request requiring approval | Complete triage returns `HumanReview`, Urgent, `HumanReview`; later exact proposal uses approval command | Review-required and approval evidence |
 | 4 | Invalid submission | Intake returns `400` or `422` by failure class; inspectable rejected delivery when transport identity is usable | Delivery rejection and safe issue codes; no request-created event |
 | 5 | Missing-information case | Complete triage returns `HumanReview`; complete-human-review is guarded until evidence resolves missing items | Interpretation, review reason, queue change |
-| 6 | Low-confidence AI result | AI success evidence stores confidence; backend triage returns `HumanReview` using configured rule version | Interpretation and deterministic threshold decision |
+| 6 | Low-confidence AI result | AI success evidence stores confidence; backend triage returns `HumanReview` using configured policy version | Interpretation and deterministic threshold decision |
 | 7 | Possible duplicate | Triage returns `DuplicateReview`; resolve-candidate command records `ConfirmedDuplicate` or `NotDuplicate` | Candidate detection/resolution and request transition |
 | 8 | Repeated webhook delivery | Repeated intake returns `200` with `IdempotentReplay` and original logical intake result | Physical replay accepted and linked; no new request/work event |
 | 9 | AI-provider failure | Retryable-failure callback moves request to `RetryableFailure`; retry-AI returns `202` with a new attempt | Failed attempt, request failure, recovery and new-attempt evidence |
@@ -217,7 +218,7 @@ List responses use opaque cursor pagination and return `next_cursor` when more r
 | 11 | Approved outbound action | Approve exact digest; start outbound; mock success callback | Immutable approval, attempt success, action/request completion |
 | 12 | Rejected outbound action | Reject exact digest; optional material-revision `201`; submit replacement; no outbound start without new approval | Immutable rejection, replacement/version events, no adapter attempt |
 
-All scenarios use meaningful commands; none requires a generic status, queue, priority, or approval patch.
+All scenarios use meaningful commands; none requires a generic category, status, queue, priority, or approval patch.
 
 ## Error contract
 
@@ -255,9 +256,10 @@ Messages are human-readable but not stable for program logic. `code` and structu
 | `409` | `INVALID_STATE_TRANSITION`, `ACTIVE_ATTEMPT_EXISTS`, `LOGICAL_OPERATION_ALREADY_SUCCEEDED`, `RETRY_NOT_ALLOWED` | Current business state blocks the command |
 | `409` | `APPROVAL_REQUIRED`, `APPROVAL_NOT_VALID`, `APPROVAL_VERSION_MISMATCH`, `PROPOSAL_SUPERSEDED` | Exact-proposal approval guard failed |
 | `409` | `DUPLICATE_RESOLUTION_CONFLICT`, `INTEGRATION_RESULT_CONFLICT` | Existing resolution/result contradicts the command |
+| `409` | `TRIAGE_EVIDENCE_STALE`, `POLICY_VERSION_CONFLICT`, `REVIEW_REQUIREMENTS_UNRESOLVED` | Current routing evidence or policy cannot safely produce the requested triage/review outcome |
 | `409` | `CALLBACK_CREDENTIAL_VERSION_CONFLICT`, `CALLBACK_CREDENTIAL_REPLACEMENT_NOT_ALLOWED` | Expected active credential changed, or attempt state/deadline forbids replacement |
 | `415` | `UNSUPPORTED_MEDIA_TYPE` | Intake is not supported JSON transport |
-| `422` | `VALIDATION_FAILED`, `INTAKE_VALIDATION_FAILED`, `CALLBACK_FIELD_NOT_ALLOWED` | JSON is well formed but violates schema or allowed evidence fields |
+| `422` | `VALIDATION_FAILED`, `INTAKE_VALIDATION_FAILED`, `CALLBACK_FIELD_NOT_ALLOWED`, `REVIEW_FACT_NOT_ALLOWED` | JSON is well formed but violates schema or allowed evidence fields |
 | `500` | `INTERNAL_ERROR` | Unexpected failure; no internal details exposed |
 | `503` | `DEPENDENCY_UNAVAILABLE` | Required infrastructure is unavailable before a safe command outcome |
 

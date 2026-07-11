@@ -2,7 +2,7 @@
 
 ## Status and intent
 
-This document describes a proposed conceptual architecture for the AI Operations Automation Suite MVP. None of these application components has been implemented. The design supports the approved [product brief](product-brief.md), [domain model](domain-model.md), [lifecycle state machines](state-machines.md), [API contracts](api-contracts.md), [event/n8n contracts](event-contracts.md), [authentication and authorization](authentication-and-authorization.md), [persistence design](persistence-design.md), and architecture decisions [0001](decisions/0001-canonical-state-and-lifecycle-boundaries.md), [0002](decisions/0002-api-command-and-event-boundaries.md), [0003](decisions/0003-authentication-and-role-permissions.md), and [0004](decisions/0004-postgres-persistence-and-transactional-outbox.md) while keeping business policy testable, integrations replaceable, and important actions auditable.
+This document describes a proposed conceptual architecture for the AI Operations Automation Suite MVP. None of these application components has been implemented. The design supports the approved [product brief](product-brief.md), [domain model](domain-model.md), [lifecycle state machines](state-machines.md), [API contracts](api-contracts.md), [event/n8n contracts](event-contracts.md), [authentication and authorization](authentication-and-authorization.md), [persistence design](persistence-design.md), [deterministic triage policy](deterministic-decision-policy.md), and architecture decisions [0001](decisions/0001-canonical-state-and-lifecycle-boundaries.md), [0002](decisions/0002-api-command-and-event-boundaries.md), [0003](decisions/0003-authentication-and-role-permissions.md), [0004](decisions/0004-postgres-persistence-and-transactional-outbox.md), and [0005](decisions/0005-deterministic-triage-and-review-policy.md) while keeping business policy testable, integrations replaceable, and important actions auditable.
 
 ## Component view
 
@@ -33,8 +33,8 @@ Arrows show proposed request or event flow, not deployed connections. The backen
 | --- | --- |
 | Next.js/TypeScript frontend | Provide customer intake and operations dashboard experiences; show validation feedback, queue state, priority, routing, proposed actions, approvals, failures, and audit history. It calls backend APIs and does not enforce authoritative business policy. |
 | Supabase Auth | Authenticate human users and issue short-lived access tokens. Application roles remain authoritative in Postgres rather than client-supplied or editable token/body values. |
-| FastAPI/Python backend | Validate human bearer tokens and WorkflowService HMAC/attempt scope; load fixed application roles; enforce endpoint/field permissions, self-approval prohibition, validation, normalization, canonical state transitions, idempotency, duplicate handling, deterministic routing, approval, retry, and audit emission. |
-| Supabase Postgres | Persist canonical aggregates, accepted-intake and command reservations, identity/security metadata, normalized approval attribution, logical operations and attempts, append-oriented audit evidence, and transactional-outbox work. It enforces relational/uniqueness/basic-state constraints and atomic commits, while FastAPI retains business policy. |
+| FastAPI/Python backend | Validate human bearer tokens and WorkflowService HMAC/attempt scope; load fixed application roles; enforce endpoint/field permissions, self-approval prohibition, validation, normalization, canonical state transitions, idempotency, duplicate handling, a versioned deterministic triage policy, approval, retry, and audit emission. |
+| Supabase Postgres | Persist canonical aggregates, accepted-intake and command reservations, identity/security metadata, immutable decision-policy and reviewed-fact evidence, normalized approval attribution, logical operations and attempts, append-oriented audit evidence, and transactional-outbox work. It enforces relational/uniqueness/basic-state constraints and atomic commits, while FastAPI retains business policy. |
 | n8n orchestration | Coordinate asynchronous and multi-step workflows, invoke allowlisted provider adapters for backend-created attempts, and report constrained evidence through backend commands/callbacks. It passes correlation identifiers but does not become the source of truth or decide policy. |
 | Replaceable AI-provider adapter | Present a stable, workflow-invoked interface for structured summary, category suggestion, missing-information list, and confidence. It validates provider output and isolates provider-specific payloads, credentials, timeouts, and errors. AI output remains advisory. |
 | Replaceable outbound-integration adapters | Present stable, workflow-invoked commands and result types for outbound actions. The proposed MVP adapter is a clearly labeled mock email provider that records simulated success or failure and sends no real email. Future real adapters must not change approval rules. |
@@ -42,7 +42,7 @@ Arrows show proposed request or event flow, not deployed connections. The backen
 
 ## Why deterministic decisions stay in backend code
 
-AI is suitable for interpreting unstructured language, but priority, routing, approval requirements, authorization, idempotency, retry eligibility, and state transitions are business decisions. They must remain in backend code because backend rules can be versioned, tested, reproduced, reviewed, and applied consistently when a provider or prompt changes.
+AI is suitable for interpreting unstructured language, but final category, priority, routing, approval requirements, authorization, idempotency, retry eligibility, and state transitions are business decisions. They must remain in backend code because a versioned policy and canonical inputs can be tested, reproduced, reviewed, and applied consistently when a provider or prompt changes.
 
 Prompts and n8n workflows may collect evidence or coordinate steps, but they must not silently redefine policy. The backend accepts validated AI evidence, combines it with normalized request data and configuration, calculates the decision, persists the result, and emits the corresponding audit event. The frontend displays those decisions without becoming an alternative enforcement path.
 
@@ -51,7 +51,7 @@ Prompts and n8n workflows may collect evidence or coordinate steps, but they mus
 1. The frontend submits an intake payload and idempotency key to the backend.
 2. The backend validates and normalizes the payload, atomically registers idempotency, and persists canonical request state.
 3. The backend records duplicate candidates and creates an AI attempt; n8n invokes the replaceable AI adapter for that exact attempt and returns constrained evidence.
-4. The backend validates the structured AI result and executes deterministic priority, routing, and review rules.
+4. The backend validates the structured AI result and applies the versioned deterministic category, priority, duplicate, routing, and review policy.
 5. n8n coordinates eligible follow-up steps using request and correlation identifiers; durable state changes occur through backend commands.
 6. The backend creates one proposal series, its durable outbound logical operation, and a versioned proposed response or scheduling invitation. Material revisions remain under that operation and require new exact approval.
 7. An authorized user approves or rejects that exact proposal through the backend.
