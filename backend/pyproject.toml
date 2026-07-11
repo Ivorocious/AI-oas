@@ -9,8 +9,11 @@ description = "Executable FastAPI foundation for the AI Operations Automation Su
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
+    "alembic>=1.16,<2",
     "fastapi>=0.116,<1",
+    "psycopg[binary]>=3.2,<4",
     "pydantic-settings>=2.10,<3",
+    "sqlalchemy>=2.0,<3",
     "uvicorn[standard]>=0.35,<1",
 ]
 
@@ -27,6 +30,9 @@ packages = ["src/ai_operations_automation"]
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
+markers = [
+    "integration: requires the local PostgreSQL service",
+]
 
 [tool.ruff]
 line-length = 100

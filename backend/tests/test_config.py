@@ -14,6 +14,15 @@ def test_environment_variable_overrides_safe_default(monkeypatch: pytest.MonkeyP
     assert settings.app_name == "Environment Operations API"
 
 
+def test_database_url_environment_variable_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    database_url = "postgresql+psycopg://local_user:local_pass@localhost:6543/local_db"
+    monkeypatch.setenv("AI_OPS_DATABASE_URL", database_url)
+
+    settings = Settings(_env_file=None)
+
+    assert str(settings.database_url) == database_url
+
+
 def test_unknown_dotenv_configuration_is_rejected(tmp_path: Path) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text("AI_OPS_UNKNOWN_SETTING=unexpected\n", encoding="utf-8")

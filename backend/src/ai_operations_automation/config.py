@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import PostgresDsn, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     app_environment: Literal["local", "test", "development", "staging", "production"] = "local"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     api_v1_prefix: str = "/api/v1"
+    database_url: PostgresDsn = PostgresDsn(
+        "postgresql+psycopg://ai_ops_local:ai_ops_local_password@127.0.0.1:55432/ai_ops_local"
+    )
 
     @field_validator("app_name")
     @classmethod

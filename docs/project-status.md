@@ -8,6 +8,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 ha
 
 ## Completed work
 
+- Established the accepted-intake persistence foundation: explicit synchronous SQLAlchemy engine/session construction, typed `AI_OPS_DATABASE_URL`, a pinned local PostgreSQL 17 Compose service, deterministic metadata, Alembic revision `0001_intake_persistence`, and exactly six structural tables for delivery, reservation, contact, request, audit, and outbox evidence. Real PostgreSQL tests validate migration round trips, uniqueness, atomic rollback, timezone-aware timestamps, and restrictive evidence deletion. The public intake command is not implemented.
 - Established the first Phase 2 executable foundation under [`backend/`](../backend/README.md): a FastAPI application factory, typed project-prefixed nonsecret settings, `GET /health`, pytest and Ruff foundations, a reproducible `uv.lock`, and local PowerShell setup/start/check instructions. Validation passes on Python 3.12 without database, network-service, credential, or running-server dependencies.
 - Defined immutable failure-policy versions, structured evidence and stable failure codes, 16 canonical audit reason codes, backend-owned retry eligibility, exact three-attempt AI/outbound budgets, AI delays of 30 seconds and 2 minutes, outbound delays of 1 minute and 5 minutes, proposal-revision behavior, callback replay, stale-attempt assessment, and the 15-minute uncertain-outcome reconciliation deadline in the approved [failure and recovery policy](failure-and-recovery-policy.md) and [ADR 0006](decisions/0006-failure-retry-and-reconciliation-policy.md).
 
@@ -104,6 +105,6 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Next milestone
 
-**Phase 2 — Intake foundation and persistence planning.**
+**Phase 2 — Atomic public intake.**
 
-Determine the smallest executable slice for validated intake, idempotency, and initial persistence without implementing the entire documented domain model at once. That later planning and implementation are not part of the completed executable-foundation task.
+Implement the approved `POST /api/v1/intake/service-requests` new-acceptance, replay, conflict, validation, audit, and outbox transaction on top of this migration. That endpoint and transaction are not part of the completed persistence-foundation task.
