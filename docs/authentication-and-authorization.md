@@ -166,6 +166,8 @@ The API catalog has 21 command rows. Submission and replacement submission delib
 
 ### Mutation commands
 
+Existing retry permissions authorize only a request for recovery; they never bypass backend-derived policy, certainty, delay, budget, exact binding, approval, reconciliation, or terminal-state guards. OperationsAgent cannot terminalize. ManagerApprover and Administrator may use the existing terminal command from valid `RetryableFailure` only with rationale. WorkflowService may submit exact-attempt evidence and reconcile but cannot choose eligibility or state. BackendService alone may execute the non-HTTP `AssessStaleAttempt` internal command described by the [failure and recovery policy](failure-and-recovery-policy.md).
+
 | # | Command endpoint/intent | PublicCustomer | OperationsAgent | ManagerApprover | Administrator | BackendService | WorkflowService | EventPublisher |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | `POST /api/v1/intake/service-requests` | A | D | D | D | D | D | D |

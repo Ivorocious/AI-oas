@@ -352,4 +352,4 @@ These are future test requirements only; no tests are created by this documentat
 
 ## Deferred and non-goal boundaries
 
-This policy does not prescribe provider-failure taxonomy, retry eligibility, retry counts, backoff, dead-letter thresholds, uncertain-outcome reconciliation, real-email behavior, adapter implementation, UI behavior, SQL, migrations, or configuration management. The outbound integration remains a proposed mock email adapter that must never be represented as sending real email. Those separate concerns must not redefine this policy's deterministic routing or human-review authority.
+This policy does not prescribe provider-failure taxonomy or recovery mechanics; those are now separately defined by the [failure and recovery policy](failure-and-recovery-policy.md) without redefining deterministic routing or human-review authority. Outbox publisher dead-letter thresholds, real-email behavior, adapter implementation, UI behavior, SQL, migrations, and configuration management remain outside this policy. The outbound integration remains a proposed mock email adapter that must never be represented as sending real email.

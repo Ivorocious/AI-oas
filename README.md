@@ -27,3 +27,4 @@ Phase 0 — Product Definition is complete. Phase 1 — Technical Design and Eng
 ## Implementation honesty
 
 This repository currently contains product and technical-design documentation only. It does not yet contain a working frontend, backend, authentication middleware, database schema or migration, n8n workflow, AI integration, email integration, or deployment. The architecture, lifecycle, API, event, security, and persistence designs described here are proposed rather than implemented.
+The Phase 1 design now includes an immutable [failure and recovery policy](docs/failure-and-recovery-policy.md) and [ADR 0006](docs/decisions/0006-failure-retry-and-reconciliation-policy.md). They define bounded AI/mock-outbound retries, stale-attempt assessment, and uncertain-outcome reconciliation. This remains documentation only; no recovery runtime or real-email integration exists.

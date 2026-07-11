@@ -184,6 +184,8 @@ stateDiagram-v2
 
 ## Integration-attempt lifecycle
 
+Failure transitions use the immutable [failure and recovery policy](failure-and-recovery-policy.md). An outbound attempt with an unknown side effect remains `Running` during bounded reconciliation; no `OutcomeUnknown` state is added. At the 15-minute deadline it becomes `TerminalFailure` if unresolved. Unclaimed `Pending` work is assessable at exactly 2 minutes, and AI `Running` work at exactly 5 minutes. Retry creates one next-ordinal `Pending` sibling only at or after `next_eligible_at`, with budget remaining and every exact-binding guard satisfied.
+
 Each record is one AI or outbound adapter invocation. The diagram's retry arrow creates a new attempt record; it does not move the failed record back to `Pending`.
 
 ```mermaid

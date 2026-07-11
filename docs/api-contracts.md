@@ -222,6 +222,10 @@ All scenarios use meaningful commands; none requires a generic category, status,
 
 ## Error contract
 
+Failure callbacks submit only sanitized evidence. FastAPI derives the final attempt/request/proposal states, recovery disposition, ordinal, maximum and remaining attempts, `next_eligible_at`, and authorized reconciliation metadata. `retry-ai` and `retry-outbound` enforce the complete eligibility predicate in the [failure and recovery policy](failure-and-recovery-policy.md); `mark-terminal-failure` remains manager/administrator-only with rationale. Attempt queries expose safe policy/recovery metadata and current aggregate versions, never raw provider errors.
+
+No route is added: the catalog remains 21 command intents over 20 normalized mutation templates and 13 queries. New stable conflicts are `RETRY_NOT_YET_ELIGIBLE`, `RETRY_BUDGET_EXHAUSTED`, `RECONCILIATION_REQUIRED`, `OUTBOUND_OUTCOME_UNRESOLVED`, `RECOVERY_DISPOSITION_CONFLICT`, and `FAILURE_POLICY_VERSION_CONFLICT`.
+
 ### Error envelope
 
 ```json

@@ -209,6 +209,8 @@ The callback URL determines success, retryable failure, or terminal failure. The
 
 ## Failure and recovery boundaries
 
+Failure evidence acceptance, assessment, eligibility, reconciliation, exhaustion, and human terminal disposition are canonical audit facts under the [failure and recovery policy](failure-and-recovery-policy.md). PII-minimized integration events are emitted only for consumer-relevant canonical state changes. Reconciliation polls, callback transport replay, and rejected early retries emit no integration event. Delivery remains at least once.
+
 - Event publication failure leaves a retryable outbox item; it does not change the already committed domain result.
 - n8n delivery or execution failure is supporting telemetry until reported through an authorized backend command/callback.
 - A callback timeout is retried with the same callback command key.

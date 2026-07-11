@@ -60,6 +60,8 @@ Prompts and n8n workflows may collect evidence or coordinate steps, but they mus
 
 ## Adapter and reliability expectations
 
+FastAPI selects the immutable `FailureRecoveryPolicyVersion` and derives classification, disposition, budget, and eligibility from sanitized adapter evidence. WorkflowService may reconcile an uncertain outbound result but cannot choose canonical state or retry eligibility. A guarded BackendService-only `AssessStaleAttempt` internal command requires no new HTTP route. See the [failure and recovery policy](failure-and-recovery-policy.md).
+
 - Application-facing adapter contracts should use provider-neutral request, result, and error types.
 - Provider credentials and raw payload details must remain behind adapter boundaries and outside source control.
 - Each integration attempt should have its own identifier, correlation to the request and approved action, timestamps, outcome, and sanitized error details.

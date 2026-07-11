@@ -8,6 +8,8 @@ Phase 0 product definition is complete. The domain model, lifecycle state machin
 
 ## Completed work
 
+- Defined immutable failure-policy versions, structured evidence and stable failure codes, exact three-attempt budgets, deterministic AI/outbound delays, proposal-revision behavior, callback replay, stale-attempt assessment, and bounded uncertain-outcome reconciliation in [the failure and recovery policy](failure-and-recovery-policy.md) and [ADR 0006](decisions/0006-failure-retry-and-reconciliation-policy.md).
+
 - Defined the Phase 0 business problem, scope, users, lifecycle, approval rules, non-goals, success criteria, risks, and 12 demo scenarios in the [product brief](product-brief.md).
 - Recorded the proposed component responsibilities in the [architecture](architecture.md).
 - Defined all required records, ownership boundaries, relationships, sensitive-data considerations, authorities, versioning expectations, and transaction boundaries in the [domain model](domain-model.md).
@@ -27,6 +29,8 @@ Phase 0 product definition is complete. The domain model, lifecycle state machin
 - Preserved the requirement that the outbound provider is mock-only and sends no real email.
 
 ## Active task
+
+No implementation task is active. Failure and recovery remain approved documentation-only design.
 
 None. The deterministic triage, duplicate-detection, human-review, and reviewed-fact policy task is complete; the next focused Phase 1 task has not started.
 

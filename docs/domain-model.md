@@ -283,6 +283,8 @@ Decisions are append-only and must preserve actor attribution. Rationales may co
 
 `IntegrationAttempt` records one invocation of a replaceable provider adapter. The MVP uses it for AI interpretation calls and mock outbound calls. It is an execution aggregate linked to the owning service request and, for outbound work, the exact proposed-action version. Retries create new attempts rather than mutating or replacing earlier attempts.
 
+Each assessed failed or stale attempt also retains the exact failure-policy ID/version/revision/digest, stable failure code and stage, provider-invocation and side-effect certainties, derived recovery disposition, attempt ordinal and maximum/remaining budget, `next_eligible_at`, sanitized Retry-After hint, reconciliation status/deadline, sanitized evidence reference/hash, terminal reason, and assessment time where applicable. These are immutable backend-derived evidence, not caller-writable eligibility or state fields. The authoritative rules are in the [failure and recovery policy](failure-and-recovery-policy.md).
+
 ### Conceptual fields
 
 | Requirement | Important fields |

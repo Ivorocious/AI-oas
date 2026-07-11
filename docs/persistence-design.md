@@ -18,6 +18,8 @@ The names below are proposed relational names, not finalized SQL identifiers. Ex
 
 ## Proposed schema inventory
 
+The inventory additionally proposes `failure_recovery_policy_versions`: immutable policy UUID, stable key, semantic version, monotonic revision, content digest, effective UTC time, status, operation rules, failure catalog, budgets/delays, stale thresholds, reconciliation deadline/rules, recovery-disposition rules, terminalization rules, and created time. Referenced attempts store exact policy identity and derived assessment evidence as specified in the [failure and recovery policy](failure-and-recovery-policy.md). No migration exists.
+
 In the tables below, “restricted” means operational customer or provider data; “security” means authentication or replay-protection metadata; and “safe metadata” excludes secrets, raw signatures, tokens, unrestricted PII, and full provider payloads.
 
 | Table | Purpose, key, and important columns | Relationships and aggregate boundary | Mutability, sensitivity, and retention | Important indexes and constraints |
@@ -374,7 +376,7 @@ No migration files are created by this design. A safe future sequence is:
 
 1. Required extensions, fixed enums, domains, and foundational types.
 2. `application_actors`, role assignments, `machine_identities`, and credential metadata.
-3. Immutable `decision_policy_versions`, intake reservation/delivery, contacts, and service-request aggregates, initially with deferred circular links.
+3. Immutable `decision_policy_versions` and `failure_recovery_policy_versions`, intake reservation/delivery, contacts, and service-request aggregates, initially with deferred circular links.
 4. AI interpretations, duplicate candidates, reviewed fact sets, routing decisions, and normalized decision-to-candidate evidence links.
 5. Logical operations, proposed actions, contributor attribution, and frozen approval exclusions so every proposal can require its series-owned operation FK from creation.
 6. Approval decisions and exact proposal/decision constraints.
