@@ -2,12 +2,13 @@
 
 ## Current phase
 
-**Phase 1 — Technical Design and Engineering Foundation: complete.**
+**Phase 2 — Executable Foundation: underway.**
 
-Phase 0 product definition is complete. Phase 1 technical design, including the approved failure and recovery policy, is complete. Phase 2 — Executable Foundation is ready to begin, but no implementation task is currently active and application implementation has not started. Remaining detailed decisions will be resolved incrementally within focused implementation tasks rather than blocking the entire executable foundation in advance.
+Phase 0 product definition and Phase 1 technical design are complete. Phase 2 has begun with a validated, runnable FastAPI foundation. No domain implementation task is currently active. Remaining detailed decisions continue to be resolved incrementally within focused implementation tasks.
 
 ## Completed work
 
+- Established the first Phase 2 executable foundation under [`backend/`](../backend/README.md): a FastAPI application factory, typed project-prefixed nonsecret settings, `GET /health`, pytest and Ruff foundations, a reproducible `uv.lock`, and local PowerShell setup/start/check instructions. Validation passes on Python 3.12 without database, network-service, credential, or running-server dependencies.
 - Defined immutable failure-policy versions, structured evidence and stable failure codes, 16 canonical audit reason codes, backend-owned retry eligibility, exact three-attempt AI/outbound budgets, AI delays of 30 seconds and 2 minutes, outbound delays of 1 minute and 5 minutes, proposal-revision behavior, callback replay, stale-attempt assessment, and the 15-minute uncertain-outcome reconciliation deadline in the approved [failure and recovery policy](failure-and-recovery-policy.md) and [ADR 0006](decisions/0006-failure-retry-and-reconciliation-policy.md).
 
 - Defined the Phase 0 business problem, scope, users, lifecycle, approval rules, non-goals, success criteria, risks, and 12 demo scenarios in the [product brief](product-brief.md).
@@ -31,11 +32,11 @@ Phase 0 product definition is complete. Phase 1 technical design, including the 
 
 ## Active task
 
-None. Phase 1 is complete. The next focused task is the Phase 2 executable-foundation kickoff.
+None. The executable-foundation task is complete.
 
 ## Blockers
 
-There is no approved design blocker preventing the narrow Phase 2 executable foundation from beginning. Implementation-time details remain intentionally incremental and are not all decided in advance.
+There is no approved design blocker preventing the next focused Phase 2 task. Implementation-time details remain intentionally incremental and are not all decided in advance.
 
 ## Approved decisions
 
@@ -94,7 +95,7 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Known limitations
 
-- The repository contains documentation only; no frontend, backend, database, workflow, integration, automated test, or deployment exists.
+- The implemented backend is limited to application startup, typed nonsecret configuration, `GET /health`, and foundation tests. No domain workflow, database, authentication, AI, n8n, outbound integration, frontend, or deployment exists.
 - API, event, security, and persistence contracts are implementation-neutral and do not yet provide executable SQL, final field lengths/types, libraries, Supabase settings, secret storage, or deployed database enforcement.
 - The demonstration policies define triage thresholds, failure taxonomy, retry budgets and delays, stale assessment, and uncertain-outcome reconciliation, but none is implemented. Real-world calibration remains deferred.
 - No real email is sent; only a proposed mock adapter is approved for the MVP.
@@ -103,6 +104,6 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Next milestone
 
-**Phase 2 — Executable Foundation.**
+**Phase 2 — Intake foundation and persistence planning.**
 
-The first narrow implementation task will establish the Python/FastAPI project foundation, dependency and configuration setup, an application factory or equivalent startup structure, a health endpoint, a testing foundation, and documentation/status updates. It will not yet implement a domain feature, database migration, authentication, AI, n8n, or frontend behavior.
+Determine the smallest executable slice for validated intake, idempotency, and initial persistence without implementing the entire documented domain model at once. That later planning and implementation are not part of the completed executable-foundation task.

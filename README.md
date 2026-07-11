@@ -6,7 +6,9 @@ The product remains configurable across service companies instead of assuming a 
 
 ## Status
 
-Phase 0 — Product Definition is complete. Phase 1 — Technical Design and Engineering Foundation is complete, including the approved failure and recovery policy. Phase 2 — Executable Foundation has not started. Application implementation has not started.
+Phase 0 — Product Definition is complete. Phase 1 — Technical Design and Engineering Foundation is complete, including the approved failure and recovery policy. Phase 2 — Executable Foundation is underway. A validated, runnable FastAPI foundation and `GET /health` endpoint now exist.
+
+- [Backend setup, startup, and validation](backend/README.md)
 
 - [Product brief](docs/product-brief.md)
 - [Proposed architecture](docs/architecture.md)
@@ -28,5 +30,4 @@ Phase 0 — Product Definition is complete. Phase 1 — Technical Design and Eng
 
 ## Implementation honesty
 
-This repository currently contains product and technical-design documentation only. It does not yet contain a working frontend, backend, authentication middleware, database schema or migration, n8n workflow, AI or outbound integration, automated test suite, or deployment. The architecture, lifecycle, API, event, security, and persistence designs described here are proposed rather than implemented.
-The Phase 1 design now includes an immutable [failure and recovery policy](docs/failure-and-recovery-policy.md) and [ADR 0006](docs/decisions/0006-failure-retry-and-reconciliation-policy.md). They define bounded AI/mock-outbound retries, stale-attempt assessment, and uncertain-outcome reconciliation. This remains documentation only; no recovery runtime or real-email integration exists.
+The repository now contains a small FastAPI executable foundation with typed nonsecret configuration, an infrastructure health endpoint, and automated foundation tests. It does not yet contain a domain workflow, database schema or migration, authentication, AI integration, n8n workflow, outbound integration, frontend, or deployment. The Phase 1 lifecycle, API, event, security, persistence, deterministic-decision, and failure-recovery contracts remain approved designs rather than implemented domain behavior.

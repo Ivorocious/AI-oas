@@ -1,0 +1,20 @@
+# Local environment files
+.env
+
+# Python virtual environments and bytecode
+.venv/
+__pycache__/
+*.py[cod]
+
+# Test, lint, and coverage artifacts
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Python build and package metadata
+build/
+dist/
+*.egg-info/
