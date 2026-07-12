@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines implementation-neutral HTTP contracts for the MVP. It applies the approved [domain model](domain-model.md), [lifecycle state machines](state-machines.md), [event contracts](event-contracts.md), [authentication and authorization model](authentication-and-authorization.md), [persistence design](persistence-design.md), [deterministic triage policy](deterministic-decision-policy.md), and ADRs [0002](decisions/0002-api-command-and-event-boundaries.md), [0003](decisions/0003-authentication-and-role-permissions.md), [0004](decisions/0004-postgres-persistence-and-transactional-outbox.md), and [0005](decisions/0005-deterministic-triage-and-review-policy.md). No API, route, authentication middleware, database schema/migration, or workflow has been implemented.
+This document defines the approved HTTP contracts for the MVP. `POST /api/v1/intake/service-requests` is implemented with its public transport, validation, idempotency, audit, and outbox behavior. The remaining commands and all queries are unimplemented; authentication middleware and n8n workflows are also unimplemented. The contract continues to apply the approved domain, lifecycle, event, authorization, persistence, and deterministic-policy designs.
 
 The proposed prefix is `/api/v1`. Commands may change canonical state; queries are read-only. FastAPI is the only authoritative command boundary. The frontend and n8n call these contracts and never write canonical database state directly.
 

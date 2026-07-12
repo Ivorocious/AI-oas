@@ -8,7 +8,8 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 ha
 
 ## Completed work
 
-- Established the accepted-intake persistence foundation: explicit synchronous SQLAlchemy engine/session construction, typed `AI_OPS_DATABASE_URL`, a pinned local PostgreSQL 17 Compose service, deterministic metadata, Alembic revision `0001_intake_persistence`, and exactly six structural tables for delivery, reservation, contact, request, audit, and outbox evidence. Real PostgreSQL tests validate migration round trips, uniqueness, atomic rollback, timezone-aware timestamps, and restrictive evidence deletion. The public intake command is not implemented.
+- Implemented and validated atomic public `POST /api/v1/intake/service-requests`: controlled transport/body parsing, closed normalized schemas, canonical SHA-256 hashing, reservation-first concurrency, new/replay/conflict/invalid/malformed outcomes, complete domain/audit/outbox transactions, safe errors, and PII-minimized events. Alembic revision `0002_atomic_intake_constraints` narrowly defers only the circular reservation foreign keys while keeping scope/key uniqueness immediate.
+- Established the accepted-intake persistence foundation: explicit synchronous SQLAlchemy engine/session construction, typed `AI_OPS_DATABASE_URL`, a pinned local PostgreSQL 17 Compose service, deterministic metadata, Alembic revision `0001_intake_persistence`, and exactly six structural tables for delivery, reservation, contact, request, audit, and outbox evidence. Real PostgreSQL tests validate migration round trips, uniqueness, atomic rollback, timezone-aware timestamps, and restrictive evidence deletion.
 - Established the first Phase 2 executable foundation under [`backend/`](../backend/README.md): a FastAPI application factory, typed project-prefixed nonsecret settings, `GET /health`, pytest and Ruff foundations, a reproducible `uv.lock`, and local PowerShell setup/start/check instructions. Validation passes on Python 3.12 without database, network-service, credential, or running-server dependencies.
 - Defined immutable failure-policy versions, structured evidence and stable failure codes, 16 canonical audit reason codes, backend-owned retry eligibility, exact three-attempt AI/outbound budgets, AI delays of 30 seconds and 2 minutes, outbound delays of 1 minute and 5 minutes, proposal-revision behavior, callback replay, stale-attempt assessment, and the 15-minute uncertain-outcome reconciliation deadline in the approved [failure and recovery policy](failure-and-recovery-policy.md) and [ADR 0006](decisions/0006-failure-retry-and-reconciliation-policy.md).
 
@@ -33,7 +34,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 ha
 
 ## Active task
 
-None. The executable-foundation task is complete.
+None. Atomic public intake is complete.
 
 ## Blockers
 
@@ -82,7 +83,7 @@ There is no approved design blocker preventing the next focused Phase 2 task. Im
 
 ## Implementation-time decisions and later milestones
 
-The following matters will be resolved incrementally within focused Phase 2 and later tasks. They do not block the narrow executable-foundation kickoff:
+The following matters will be resolved incrementally within focused Phase 2 and later tasks:
 
 - Exact OpenAPI component schemas, field constraints, generated examples, and contract-test fixtures
 - Supabase project/token configuration, authentication libraries, controlled demo-user setup, and security contract tests
@@ -96,7 +97,7 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Known limitations
 
-- The implemented backend is limited to application startup, typed nonsecret configuration, `GET /health`, and foundation tests. No domain workflow, database, authentication, AI, n8n, outbound integration, frontend, or deployment exists.
+- The implemented backend includes atomic public intake and six-table PostgreSQL persistence. No service-request query, AI interpretation, triage, authentication, n8n, publisher, outbound integration, frontend, or deployment exists.
 - API, event, security, and persistence contracts are implementation-neutral and do not yet provide executable SQL, final field lengths/types, libraries, Supabase settings, secret storage, or deployed database enforcement.
 - The demonstration policies define triage thresholds, failure taxonomy, retry budgets and delays, stale assessment, and uncertain-outcome reconciliation, but none is implemented. Real-world calibration remains deferred.
 - No real email is sent; only a proposed mock adapter is approved for the MVP.
@@ -105,6 +106,6 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Next milestone
 
-**Phase 2 — Atomic public intake.**
+**Phase 2 — Service-request query and interpretation foundation.**
 
-Implement the approved `POST /api/v1/intake/service-requests` new-acceptance, replay, conflict, validation, audit, and outbox transaction on top of this migration. That endpoint and transaction are not part of the completed persistence-foundation task.
+Implement the read-only service-request query required by the intake `Location` header and establish the smallest persistence/API foundation for AI interpretation without yet implementing deterministic triage.

@@ -6,7 +6,7 @@ The product remains configurable across service companies instead of assuming a 
 
 ## Status
 
-Phase 0 — Product Definition is complete. Phase 1 — Technical Design and Engineering Foundation is complete, including the approved failure and recovery policy. Phase 2 — Executable Foundation is underway. A validated FastAPI foundation, `GET /health`, and initial PostgreSQL/SQLAlchemy/Alembic migration infrastructure now exist.
+Phase 0 — Product Definition is complete. Phase 1 — Technical Design and Engineering Foundation is complete. Phase 2 — Executable Foundation is underway. FastAPI, `GET /health`, PostgreSQL migrations, and atomic `POST /api/v1/intake/service-requests` behavior are implemented and validated.
 
 - [Backend setup, startup, and validation](backend/README.md)
 
@@ -30,4 +30,4 @@ Phase 0 — Product Definition is complete. Phase 1 — Technical Design and Eng
 
 ## Implementation honesty
 
-The repository now contains a small FastAPI executable foundation plus a six-table PostgreSQL persistence migration and real-database constraint tests. It does not yet contain public intake behavior, another domain workflow, authentication, AI integration, n8n workflow, outbound integration, frontend, or deployment. The remaining Phase 1 lifecycle, API, event, security, persistence, deterministic-decision, and failure-recovery contracts remain approved designs rather than implemented domain behavior.
+The repository now implements atomic public intake for new acceptance, replay, conflict, invalid input, and malformed JSON with audit/outbox persistence. It does not yet implement service-request queries, AI interpretation, deterministic triage, duplicate detection, authentication, n8n, outbox publishing, outbound integration, frontend, or deployment. Remaining Phase 1 contracts stay approved designs until implemented by focused slices.

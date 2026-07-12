@@ -243,12 +243,20 @@ class AcceptedIntakeKey(Base):
             "inbound_deliveries.id",
             name="fk_accepted_key_original_delivery",
             ondelete="RESTRICT",
+            deferrable=True,
+            initially="DEFERRED",
         ),
         nullable=False,
     )
     request_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("service_requests.id", name="fk_accepted_key_request", ondelete="RESTRICT"),
+        ForeignKey(
+            "service_requests.id",
+            name="fk_accepted_key_request",
+            ondelete="RESTRICT",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         nullable=False,
     )
     original_http_status: Mapped[int] = mapped_column(SmallInteger, nullable=False)

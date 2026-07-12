@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines implementation-neutral integration-event delivery and n8n boundaries for the MVP. It complements the [API contracts](api-contracts.md), [domain model](domain-model.md), [state machines](state-machines.md), [authentication and authorization model](authentication-and-authorization.md), [persistence design](persistence-design.md), [deterministic triage policy](deterministic-decision-policy.md), and ADRs [0002](decisions/0002-api-command-and-event-boundaries.md), [0003](decisions/0003-authentication-and-role-permissions.md), [0004](decisions/0004-postgres-persistence-and-transactional-outbox.md), and [0005](decisions/0005-deterministic-triage-and-review-policy.md). No message broker, transactional outbox, webhook publisher, n8n workflow, callback authentication, or event consumer has been implemented.
+This document defines the approved integration-event and n8n boundaries. Atomic public intake now creates PII-minimized `Pending` outbox rows transactionally with canonical audit evidence. No outbox publisher, message transport, n8n workflow, callback authentication, or event consumer is implemented.
 
 ## Record types and authority
 

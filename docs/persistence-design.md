@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the proposed Phase 1 persistence, transaction, idempotency, and transactional-outbox design for the MVP. It implements no schema: no SQL, migration, Supabase project, database role, trigger, function, or application code exists. It refines the approved [domain model](domain-model.md), [state machines](state-machines.md), [API contracts](api-contracts.md), [event contracts](event-contracts.md), [authentication and authorization model](authentication-and-authorization.md), and [deterministic triage policy](deterministic-decision-policy.md) under [ADR 0004](decisions/0004-postgres-persistence-and-transactional-outbox.md) and [ADR 0005](decisions/0005-deterministic-triage-and-review-policy.md).
+This document defines the approved Phase 1 persistence design. Six intake/audit/outbox representations and atomic public intake are implemented through SQLAlchemy and Alembic; the remaining 21 representations, publisher behavior, Supabase project configuration, and database-role hardening remain unimplemented. The detailed design remains authoritative for future focused slices.
 
 The names below are proposed relational names, not finalized SQL identifiers. Exact data types, lengths, encryption facilities, partitioning, and physical storage parameters remain migration-design decisions.
 
