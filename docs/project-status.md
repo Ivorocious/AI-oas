@@ -98,7 +98,7 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 ## Known limitations
 
 - The implemented backend includes atomic public intake and six-table PostgreSQL persistence. No service-request query, AI interpretation, triage, authentication, n8n, publisher, outbound integration, frontend, or deployment exists.
-- API, event, security, and persistence contracts are implementation-neutral and do not yet provide executable SQL, final field lengths/types, libraries, Supabase settings, secret storage, or deployed database enforcement.
+- Intake API/event behavior and six-table SQL migrations are executable; remaining contract schemas, persistence representations, Supabase settings, secret storage, and deployed database enforcement are not yet implemented.
 - The demonstration policies define triage thresholds, failure taxonomy, retry budgets and delays, stale assessment, and uncertain-outcome reconciliation, but none is implemented. Real-world calibration remains deferred.
 - No real email is sent; only a proposed mock adapter is approved for the MVP.
 - The design targets one demonstration organization, one primary intake path, and modest operational scale.

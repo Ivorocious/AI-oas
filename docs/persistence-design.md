@@ -371,7 +371,7 @@ Core requests, decision-policy versions, routing decisions, duplicate candidate 
 
 ## Proposed migration ordering
 
-No migration files are created by this design. A safe future sequence is:
+Migrations `0001_intake_persistence` and `0002_atomic_intake_constraints` implement the six-table intake foundation and narrowly deferred reservation foreign keys. The remaining safe future sequence is:
 
 1. Required extensions, fixed enums, domains, and foundational types.
 2. `application_actors`, role assignments, `machine_identities`, and credential metadata.
@@ -390,7 +390,7 @@ Enum value removal/renaming, narrowing a populated column, adding uniqueness to 
 
 ## Future persistence-focused test requirements
 
-These are requirements for later executable integration/constraint tests; no tests exist through this task.
+Executable new/replay/conflict/invalid/malformed, concurrency, migration, constraint, rollback, timezone, and evidence-retention tests now cover the implemented intake slice. The remaining items are requirements for later capabilities.
 
 1. Concurrent accepted intake with the same key and same canonical payload creates one request and one accepted replay.
 2. Concurrent accepted intake with the same key and different payload creates one request and one conflict.
@@ -433,4 +433,4 @@ These are requirements for later executable integration/constraint tests; no tes
 
 ## Deferred implementation choices
 
-Exact SQL types and lengths, encryption/key management, hash functions and canonicalization specifications, index names, trigger/function implementation, transaction isolation level by command, connection pooling, partitioning, backup/restore, disaster recovery, vacuum tuning, archival jobs, final retention durations, Supabase project settings, and migration tooling remain deferred. None may weaken the approved lifecycle, authorization, idempotency, approval, audit, or at-least-once event guarantees.
+Intake idempotency-key hashing and normalized canonical-payload hashing are implemented with SHA-256. Hashing specifications for future commands, proposals, providers, and policies, plus encryption/key management, remaining SQL types/indexes, triggers/functions, transaction isolation, pooling, partitioning, backup/restore, retention, Supabase settings, and later migration tooling remain deferred. None may weaken the approved guarantees.

@@ -86,7 +86,7 @@ Command-specific results add identifiers, lifecycle summaries, or attempt refere
 
 `POST /api/v1/intake/service-requests`
 
-Required transport inputs are `Content-Type: application/json`, `Idempotency-Key`, and a JSON body. `X-Correlation-ID` is optional. The body contains `schema_version`, normalized contact inputs, and service-request inputs such as description and optional category, location, or scheduling context. Exact field lengths and channel-specific validation remain a later schema task.
+Required transport inputs are `Content-Type: application/json`, `Idempotency-Key`, and a JSON body. `X-Correlation-ID` is optional. The implemented intake endpoint uses an executable closed schema with bounded field lengths, normalized contact inputs, channel/contact consistency, and bounded service-request description/location/timing fields. Exact schemas for remaining commands and queries remain deferred.
 
 ### Outcomes
 
@@ -274,4 +274,4 @@ Every business guard failure uses `409` and the most specific code. A command ne
 - `/api/v1` changes remain backward compatible. Additive optional fields are allowed; removing fields, changing meaning, or changing stable enum values requires a new API version.
 - Body and event `schema_version` values evolve independently from the URL version.
 - Clients ignore unknown additive response fields but reject unknown command enum values they intend to send.
-- Exact authentication libraries/configuration, payload length limits, retry timing, and physical SQL/migration details remain deferred; those choices cannot weaken these guards, the permission matrix, the proposed persistence constraints, or error semantics.
+- Exact authentication libraries/configuration, non-intake payload limits, retry timing, and physical SQL/migration details for unimplemented slices remain deferred; those choices cannot weaken these guards, the permission matrix, implemented intake constraints, or error semantics.

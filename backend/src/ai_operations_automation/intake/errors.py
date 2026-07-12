@@ -18,6 +18,7 @@ class ErrorBody(BaseModel):
     code: str
     message: str
     correlation_id: uuid.UUID
+    delivery_id: uuid.UUID | None = None
     retryable: bool = False
     current_versions: dict[str, int] = Field(default_factory=dict)
     details: list[ErrorDetail] = Field(default_factory=list)
@@ -34,6 +35,7 @@ class IntakeError(Exception):
     message: str
     retryable: bool = False
     details: list[dict[str, str]] = field(default_factory=list)
+    delivery_id: uuid.UUID | None = None
 
     def response(self, correlation_id: uuid.UUID) -> dict[str, Any]:
         return ErrorEnvelope(
@@ -41,10 +43,11 @@ class IntakeError(Exception):
                 code=self.code,
                 message=self.message,
                 correlation_id=correlation_id,
+                delivery_id=self.delivery_id,
                 retryable=self.retryable,
                 details=[ErrorDetail(**detail) for detail in self.details],
             )
-        ).model_dump(mode="json")
+        ).model_dump(mode="json", exclude_none=True)
 
 
 def safe_validation_details(errors: list[dict[str, Any]]) -> list[dict[str, str]]:

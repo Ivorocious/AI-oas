@@ -46,7 +46,7 @@ class IntakeService:
         correlation_id: uuid.UUID,
     ) -> IntakeServiceResult:
         payload_hash = canonical_payload_hash(payload)
-        conflict = False
+        conflict_delivery_id: uuid.UUID | None = None
         with self.session_factory() as session, session.begin():
             reservation = self._reservation(session, key_digest)
             if reservation is not None:
@@ -54,15 +54,16 @@ class IntakeService:
                     return self._create_replay(
                         session, reservation, correlation_id, payload.schema_version
                     )
-                self._create_conflict(session, reservation, correlation_id, payload.schema_version)
-                conflict = True
-        if conflict:
-            raise self._conflict_error()
+                conflict_delivery_id = self._create_conflict(
+                    session, reservation, correlation_id, payload.schema_version
+                )
+        if conflict_delivery_id is not None:
+            raise self._conflict_error(conflict_delivery_id)
 
         try:
             return self._create_new(payload, key_digest, payload_hash, correlation_id)
         except IntegrityError:
-            conflict = False
+            conflict_delivery_id = None
             with self.session_factory() as session, session.begin():
                 winner = self._reservation(session, key_digest)
                 if winner is None:
@@ -71,10 +72,11 @@ class IntakeService:
                     return self._create_replay(
                         session, winner, correlation_id, payload.schema_version
                     )
-                self._create_conflict(session, winner, correlation_id, payload.schema_version)
-                conflict = True
-            if conflict:
-                raise self._conflict_error()
+                conflict_delivery_id = self._create_conflict(
+                    session, winner, correlation_id, payload.schema_version
+                )
+            if conflict_delivery_id is not None:
+                raise self._conflict_error(conflict_delivery_id)
             raise RuntimeError("unreachable intake race resolution")
 
     def process_rejected(
@@ -86,21 +88,22 @@ class IntakeService:
         error_code: str,
         issues: list[dict[str, str]],
         raw_body_fingerprint: str | None = None,
-    ) -> None:
-        conflict = False
+    ) -> uuid.UUID:
+        conflict_delivery_id: uuid.UUID | None = None
+        rejected_delivery_id: uuid.UUID | None = None
         with self.session_factory() as session, session.begin():
             reservation = self._reservation(session, key_digest)
             if reservation is not None:
-                self._create_conflict(
+                conflict_delivery_id = self._create_conflict(
                     session,
                     reservation,
                     correlation_id,
                     schema_version,
                     raw_body_fingerprint=raw_body_fingerprint,
                 )
-                conflict = True
             else:
                 delivery_id = uuid.uuid4()
+                rejected_delivery_id = delivery_id
                 delivery = InboundDelivery(
                     id=delivery_id,
                     scope=INTAKE_SCOPE,
@@ -129,8 +132,11 @@ class IntakeService:
                     payload={"delivery_id": str(delivery_id), "intake_outcome": "Invalid"},
                 )
 
-        if conflict:
-            raise self._conflict_error()
+        if conflict_delivery_id is not None:
+            raise self._conflict_error(conflict_delivery_id)
+        if rejected_delivery_id is None:
+            raise RuntimeError("rejected delivery did not commit")
+        return rejected_delivery_id
 
     @staticmethod
     def _reservation(session: Session, key_digest: str) -> AcceptedIntakeKey | None:
@@ -323,7 +329,7 @@ class IntakeService:
         schema_version: str,
         *,
         raw_body_fingerprint: str | None = None,
-    ) -> None:
+    ) -> uuid.UUID:
         delivery_id = uuid.uuid4()
         session.add(
             InboundDelivery(
@@ -337,7 +343,6 @@ class IntakeService:
                 raw_body_fingerprint=raw_body_fingerprint,
                 intake_outcome="IdempotencyConflict",
                 original_delivery_id=reservation.original_delivery_id,
-                logical_result_request_id=reservation.request_id,
                 accepted_intake_key_id=reservation.id,
                 sanitized_error_code="IDEMPOTENCY_CONFLICT",
                 completed_at=datetime.now(UTC),
@@ -355,13 +360,15 @@ class IntakeService:
             reason_codes=["IDEMPOTENCY_CONFLICT"],
             payload={"delivery_id": str(delivery_id), "intake_outcome": "IdempotencyConflict"},
         )
+        return delivery_id
 
     @staticmethod
-    def _conflict_error() -> IntakeError:
+    def _conflict_error(delivery_id: uuid.UUID) -> IntakeError:
         return IntakeError(
             409,
             "IDEMPOTENCY_CONFLICT",
             "The idempotency key was already accepted for a different request.",
+            delivery_id=delivery_id,
         )
 
     @staticmethod

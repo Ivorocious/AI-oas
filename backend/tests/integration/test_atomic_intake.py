@@ -80,6 +80,16 @@ def counts(engine: Engine) -> dict[str, int]:
         }
 
 
+def delivery_row(engine: Engine, delivery_id: str):
+    deliveries = Base.metadata.tables["inbound_deliveries"]
+    with engine.connect() as connection:
+        return (
+            connection.execute(select(deliveries).where(deliveries.c.id == uuid.UUID(delivery_id)))
+            .mappings()
+            .one()
+        )
+
+
 def test_new_acceptance_creates_complete_graph_audit_and_pii_free_outbox(client, engine) -> None:
     response = post(client, "new-key-0001", valid_payload())
     assert response.status_code == 201
@@ -142,6 +152,14 @@ def test_changed_payload_conflicts_and_preserves_original_graph(client, engine) 
     assert first.status_code == 201
     assert second.status_code == 409
     assert second.json()["error"]["code"] == "IDEMPOTENCY_CONFLICT"
+    assert "service_request_id" not in second.text
+    assert "payload_hash" not in second.text
+    assert "key_digest" not in second.text
+    conflict_row = delivery_row(engine, second.json()["error"]["delivery_id"])
+    assert conflict_row["created_request_id"] is None
+    assert conflict_row["logical_result_request_id"] is None
+    assert conflict_row["original_delivery_id"] is not None
+    assert conflict_row["accepted_intake_key_id"] is not None
     result = counts(engine)
     assert result["contacts"] == result["service_requests"] == result["accepted_intake_keys"] == 1
     assert result["inbound_deliveries"] == 2
@@ -155,6 +173,11 @@ def test_invalid_input_persists_only_rejection_and_allows_corrected_reuse(client
     assert counts(engine)["accepted_intake_keys"] == 0
     assert counts(engine)["inbound_deliveries"] == 1
     assert "tiny" not in response.text
+    rejected = delivery_row(engine, response.json()["error"]["delivery_id"])
+    assert rejected["processing_status"] == "Rejected"
+    assert rejected["intake_outcome"] == "Invalid"
+    assert rejected["created_request_id"] is None
+    assert rejected["logical_result_request_id"] is None
     corrected = post(client, "correctable-key", valid_payload())
     assert corrected.status_code == 201
 
@@ -163,11 +186,19 @@ def test_malformed_unreserved_is_400_but_accepted_key_is_conflict(client, engine
     malformed = post(client, "malformed-key-1", '{"schema_version":')
     assert malformed.status_code == 400
     assert malformed.json()["error"]["code"] == "MALFORMED_JSON"
+    malformed_row = delivery_row(engine, malformed.json()["error"]["delivery_id"])
+    assert malformed_row["raw_body_fingerprint"] is not None
+    assert malformed_row["canonical_payload_hash"] is None
+    assert malformed_row["sanitized_error_code"] == "MALFORMED_JSON"
     assert counts(engine)["accepted_intake_keys"] == 0
     post(client, "accepted-malformed", valid_payload())
     conflict = post(client, "accepted-malformed", '{"schema_version":')
     assert conflict.status_code == 409
     assert conflict.json()["error"]["code"] == "IDEMPOTENCY_CONFLICT"
+    conflict_row = delivery_row(engine, conflict.json()["error"]["delivery_id"])
+    assert conflict_row["raw_body_fingerprint"] is not None
+    assert conflict_row["created_request_id"] is None
+    assert conflict_row["logical_result_request_id"] is None
 
 
 def test_invalid_body_after_accepted_reservation_is_conflict(client) -> None:
@@ -211,6 +242,7 @@ def test_transport_rejections_create_no_rows(
         headers={"Content-Type": content_type, **headers},
     )
     assert response.json()["error"]["code"] == expected_code
+    assert "delivery_id" not in response.json()["error"]
     assert sum(counts(engine).values()) == 0
 
 
@@ -231,6 +263,13 @@ def test_same_key_different_payload_concurrency_is_new_and_conflict(client, engi
     assert sorted(response.status_code for response in responses) == [201, 409]
     assert counts(engine)["service_requests"] == 1
     assert counts(engine)["inbound_deliveries"] == 2
+    conflict_response = next(response for response in responses if response.status_code == 409)
+    conflict_row = delivery_row(engine, conflict_response.json()["error"]["delivery_id"])
+    assert conflict_row["intake_outcome"] == "IdempotencyConflict"
+    assert conflict_row["created_request_id"] is None
+    assert conflict_row["logical_result_request_id"] is None
+    assert conflict_row["original_delivery_id"] is not None
+    assert conflict_row["accepted_intake_key_id"] is not None
 
 
 def test_forced_service_failure_rolls_back_partial_graph(client, engine, monkeypatch) -> None:
@@ -267,3 +306,14 @@ def test_second_migration_is_applied_and_deferrable(engine) -> None:
         )
     assert revision == "0002_atomic_intake_constraints"
     assert deferred == 2
+
+
+def test_overlong_email_returns_persisted_422_not_500(client, engine) -> None:
+    body = valid_payload()
+    body["contact"]["email"] = f"{'a' * 310}@example.com"
+    response = post(client, "overlong-email-key", body)
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INTAKE_VALIDATION_FAILED"
+    row = delivery_row(engine, response.json()["error"]["delivery_id"])
+    assert row["intake_outcome"] == "Invalid"
+    assert body["contact"]["email"] not in response.text

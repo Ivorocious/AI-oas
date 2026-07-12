@@ -5,7 +5,11 @@ import pytest
 from pydantic import ValidationError
 from starlette.requests import Request
 
-from ai_operations_automation.api.intake import _correlation_id, _idempotency_key
+from ai_operations_automation.api.intake import (
+    _correlation_id,
+    _idempotency_key,
+    _validate_content_type,
+)
 from ai_operations_automation.app import create_app
 from ai_operations_automation.config import Settings
 from ai_operations_automation.intake.canonicalization import (
@@ -167,3 +171,45 @@ def test_openapi_documents_intake_schema_and_statuses() -> None:
     operation = schema["paths"]["/api/v1/intake/service-requests"]["post"]
     assert "requestBody" in operation
     assert {"200", "201", "400", "409", "415", "422", "500", "503"} <= set(operation["responses"])
+    request_schema = operation["requestBody"]["content"]["application/json"]["schema"]
+
+    def assert_refs_resolve(value: object) -> None:
+        if isinstance(value, dict):
+            reference = value.get("$ref")
+            if isinstance(reference, str) and reference.startswith("#/"):
+                target: object = schema
+                for part in reference[2:].split("/"):
+                    target = target[part]  # type: ignore[index]
+                assert target is not None
+            for item in value.values():
+                assert_refs_resolve(item)
+        elif isinstance(value, list):
+            for item in value:
+                assert_refs_resolve(item)
+
+    assert_refs_resolve(request_schema)
+    assert {"schema_version", "contact", "service_request"} <= set(request_schema["properties"])
+    assert "display_name" in request_schema["properties"]["contact"]["properties"]
+    assert "description" in request_schema["properties"]["service_request"]["properties"]
+
+
+@pytest.mark.parametrize(
+    "content_type",
+    ["application/json", "application/json; charset=utf-8", 'application/json; charset="UTF-8"'],
+)
+def test_json_content_type_variants_are_accepted(content_type: str) -> None:
+    _validate_content_type(request_with_headers(content_type=content_type))
+
+
+@pytest.mark.parametrize("content_type", ["text/plain", "application/json; charset=iso-8859-1"])
+def test_non_json_or_non_utf8_content_type_is_rejected(content_type: str) -> None:
+    with pytest.raises(IntakeError) as exc_info:
+        _validate_content_type(request_with_headers(content_type=content_type))
+    assert exc_info.value.code == "UNSUPPORTED_MEDIA_TYPE"
+
+
+def test_overlong_email_is_rejected_by_closed_schema() -> None:
+    data = payload()
+    data["contact"]["email"] = f"{'a' * 310}@example.com"
+    with pytest.raises(ValidationError):
+        IntakeRequest.model_validate(data)

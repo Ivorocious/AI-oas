@@ -35,6 +35,13 @@ class ContactInput(BaseModel):
             return value.strip().lower()
         return value
 
+    @field_validator("email")
+    @classmethod
+    def bound_email_length(cls, value: EmailStr | None) -> EmailStr | None:
+        if value is not None and len(str(value)) > 320:
+            raise ValueError("email exceeds maximum length")
+        return value
+
     @field_validator("phone", mode="before")
     @classmethod
     def normalize_phone_field(cls, value: object) -> object:

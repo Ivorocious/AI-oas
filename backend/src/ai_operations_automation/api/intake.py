@@ -2,6 +2,9 @@
 
 import json
 import uuid
+from copy import deepcopy
+from email.message import Message
+from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
@@ -57,11 +60,34 @@ def _idempotency_key(request: Request) -> str:
 
 def _validate_content_type(request: Request) -> None:
     value = request.headers.get("Content-Type", "")
-    parts = [part.strip().lower() for part in value.split(";")]
-    if not parts or parts[0] != "application/json":
+    message = Message()
+    message["content-type"] = value
+    if message.get_content_type().lower() != "application/json":
         raise IntakeError(415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json.")
-    if len(parts) > 1 and parts[1:] != ["charset=utf-8"]:
+    parameters = message.get_params(header="content-type", failobj=[])[1:]
+    if any(name.lower() != "charset" for name, _ in parameters):
         raise IntakeError(415, "UNSUPPORTED_MEDIA_TYPE", "Only UTF-8 JSON is supported.")
+    charsets = [parameter for name, parameter in parameters if name.lower() == "charset"]
+    if len(charsets) > 1 or (charsets and str(charsets[0]).lower() != "utf-8"):
+        raise IntakeError(415, "UNSUPPORTED_MEDIA_TYPE", "Only UTF-8 JSON is supported.")
+
+
+def _dereferenced_request_schema() -> dict[str, Any]:
+    schema = IntakeRequest.model_json_schema()
+    definitions = schema.pop("$defs", {})
+
+    def resolve(value: Any) -> Any:
+        if isinstance(value, dict):
+            reference = value.get("$ref")
+            if isinstance(reference, str) and reference.startswith("#/$defs/"):
+                name = reference.rsplit("/", 1)[-1]
+                return resolve(deepcopy(definitions[name]))
+            return {key: resolve(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [resolve(item) for item in value]
+        return value
+
+    return resolve(schema)
 
 
 def _error_response(error: IntakeError, correlation_id: uuid.UUID) -> JSONResponse:
@@ -80,7 +106,7 @@ def _error_response(error: IntakeError, correlation_id: uuid.UUID) -> JSONRespon
     openapi_extra={
         "requestBody": {
             "required": True,
-            "content": {"application/json": {"schema": IntakeRequest.model_json_schema()}},
+            "content": {"application/json": {"schema": _dereferenced_request_schema()}},
         }
     },
 )
@@ -97,7 +123,7 @@ async def create_service_request_intake(request: Request) -> JSONResponse:
             parsed = json.loads(raw_body)
         except (json.JSONDecodeError, UnicodeDecodeError):
             try:
-                service.process_rejected(
+                delivery_id = service.process_rejected(
                     key_digest=key_digest,
                     correlation_id=correlation_id,
                     schema_version="unknown",
@@ -108,7 +134,12 @@ async def create_service_request_intake(request: Request) -> JSONResponse:
             except IntakeError as error:
                 return _error_response(error, correlation_id)
             return _error_response(
-                IntakeError(400, "MALFORMED_JSON", "The request body is not valid JSON."),
+                IntakeError(
+                    400,
+                    "MALFORMED_JSON",
+                    "The request body is not valid JSON.",
+                    delivery_id=delivery_id,
+                ),
                 correlation_id,
             )
 
@@ -120,7 +151,7 @@ async def create_service_request_intake(request: Request) -> JSONResponse:
                 parsed.get("schema_version", "unknown") if isinstance(parsed, dict) else "unknown"
             )
             try:
-                service.process_rejected(
+                delivery_id = service.process_rejected(
                     key_digest=key_digest,
                     correlation_id=correlation_id,
                     schema_version=str(schema_version)[:32],
@@ -135,6 +166,7 @@ async def create_service_request_intake(request: Request) -> JSONResponse:
                     "INTAKE_VALIDATION_FAILED",
                     "The intake request failed validation.",
                     details=details,
+                    delivery_id=delivery_id,
                 ),
                 correlation_id,
             )
