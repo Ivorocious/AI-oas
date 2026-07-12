@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
-from ai_operations_automation.api.intake import _correlation_id
+from ai_operations_automation.api.correlation import resolve_request_correlation
 from ai_operations_automation.auth.dependencies import require_service_request_reader
 from ai_operations_automation.auth.models import AuthenticatedHuman
 from ai_operations_automation.db.dependencies import get_session_factory
@@ -33,9 +33,9 @@ router = APIRouter()
 def get_service_request(
     request_id: str,
     request: Request,
+    correlation_id: Annotated[uuid.UUID, Depends(resolve_request_correlation)],
     _human: Annotated[AuthenticatedHuman, Depends(require_service_request_reader)],
 ) -> JSONResponse:
-    correlation_id = _correlation_id(request)
     try:
         parsed_id = uuid.UUID(request_id)
     except ValueError as exc:
@@ -47,6 +47,10 @@ def get_service_request(
     except SQLAlchemyError as exc:
         raise IntakeError(
             503, "DEPENDENCY_UNAVAILABLE", "A required dependency is unavailable.", True
+        ) from exc
+    except Exception as exc:
+        raise IntakeError(
+            500, "INTERNAL_ERROR", "The request could not be completed safely."
         ) from exc
     if result is None:
         raise IntakeError(404, "RESOURCE_NOT_FOUND", "The requested resource was not found.")

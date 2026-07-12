@@ -99,3 +99,46 @@ def test_key_discovery_failure_is_distinct(key_material) -> None:
 
     with pytest.raises(KeyDiscoveryFailure):
         verifier(jwk, loader).verify(token(private_key))
+
+
+def test_unknown_kid_refreshes_once_then_authentication_fails(key_material) -> None:
+    private_key, jwk = key_material
+    calls = 0
+
+    def loader():
+        nonlocal calls
+        calls += 1
+        return {"keys": []}
+
+    with pytest.raises(AuthenticationFailure):
+        verifier(jwk, loader).verify(token(private_key))
+    assert calls == 2
+
+
+@pytest.mark.parametrize("document", [{}, {"keys": "invalid"}])
+def test_malformed_jwks_is_discovery_failure(key_material, document) -> None:
+    private_key, jwk = key_material
+    with pytest.raises(KeyDiscoveryFailure):
+        verifier(jwk, lambda: document).verify(token(private_key))
+
+
+def test_invalid_jwk_is_discovery_failure(key_material) -> None:
+    private_key, jwk = key_material
+    invalid = {"kid": "primary", "kty": "RSA", "n": "invalid", "e": "invalid"}
+    with pytest.raises(KeyDiscoveryFailure):
+        verifier(jwk, lambda: {"keys": [invalid]}).verify(token(private_key))
+
+
+def test_cached_known_key_avoids_repeated_discovery(key_material) -> None:
+    private_key, jwk = key_material
+    calls = 0
+
+    def loader():
+        nonlocal calls
+        calls += 1
+        return {"keys": [jwk]}
+
+    subject_verifier = verifier(jwk, loader)
+    assert subject_verifier.verify(token(private_key)) == "supabase-user-1"
+    assert subject_verifier.verify(token(private_key)) == "supabase-user-1"
+    assert calls == 1

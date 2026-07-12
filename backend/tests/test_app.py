@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from ai_operations_automation.app import create_app
+from ai_operations_automation.auth.verifier import KeyDiscoveryFailure
 from ai_operations_automation.config import Settings
 
 
@@ -42,6 +43,48 @@ def test_missing_and_non_bearer_authentication_are_401() -> None:
 
     assert missing.status_code == non_bearer.status_code == 401
     assert missing.headers["www-authenticate"] == "Bearer"
+
+
+def test_malformed_empty_and_duplicate_authorization_are_401() -> None:
+    client = TestClient(create_app(Settings(_env_file=None)))
+    path = "/api/v1/service-requests/00000000-0000-0000-0000-000000000001"
+
+    malformed = client.get(path, headers={"Authorization": "Bearer"})
+    empty = client.get(path, headers={"Authorization": "Bearer "})
+    duplicate = client.get(
+        path,
+        headers=[("Authorization", "Bearer first"), ("Authorization", "Bearer second")],
+    )
+
+    assert malformed.status_code == empty.status_code == duplicate.status_code == 401
+
+
+def test_invalid_correlation_precedes_missing_authentication() -> None:
+    client = TestClient(create_app(Settings(_env_file=None)))
+    response = client.get(
+        "/api/v1/service-requests/00000000-0000-0000-0000-000000000001",
+        headers={"X-Correlation-ID": "invalid"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "INVALID_TRANSPORT_IDENTIFIER"
+
+
+def test_jwks_discovery_failure_maps_to_safe_503() -> None:
+    class FailingVerifier:
+        def verify(self, _token):
+            raise KeyDiscoveryFailure
+
+    correlation = "00000000-0000-0000-0000-000000000123"
+    client = TestClient(create_app(Settings(_env_file=None), jwt_verifier=FailingVerifier()))
+    response = client.get(
+        "/api/v1/service-requests/00000000-0000-0000-0000-000000000001",
+        headers={"Authorization": "Bearer opaque", "X-Correlation-ID": correlation},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["correlation_id"] == correlation
+    assert response.headers["x-correlation-id"] == correlation
 
 
 def test_openapi_documents_protected_query_and_resolves_local_references() -> None:

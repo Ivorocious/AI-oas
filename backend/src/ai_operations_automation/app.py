@@ -41,11 +41,7 @@ def create_app(
         headers = {"X-Correlation-ID": str(uuid.uuid4())}
         if error.status_code == 401:
             headers["WWW-Authenticate"] = "Bearer"
-        correlation = _request.headers.get("X-Correlation-ID")
-        try:
-            correlation_id = uuid.UUID(correlation) if correlation else uuid.uuid4()
-        except ValueError:
-            correlation_id = uuid.uuid4()
+        correlation_id = getattr(_request.state, "correlation_id", uuid.uuid4())
         headers["X-Correlation-ID"] = str(correlation_id)
         return JSONResponse(
             error.response(correlation_id), status_code=error.status_code, headers=headers

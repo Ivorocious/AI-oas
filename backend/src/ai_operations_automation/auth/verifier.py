@@ -76,13 +76,15 @@ class SupabaseJwtVerifier:
         expired = time.monotonic() - self._loaded_at >= self.cache_seconds
         if refresh or not self._keys or expired:
             document = self.loader()
+            if not isinstance(document, dict) or not isinstance(document.get("keys"), list):
+                raise KeyDiscoveryFailure
             try:
                 self._keys = {
                     item["kid"]: jwt.PyJWK.from_dict(item)
                     for item in document["keys"]
                     if isinstance(item, dict) and isinstance(item.get("kid"), str)
                 }
-            except (KeyError, jwt.PyJWTError) as exc:
+            except (KeyError, TypeError, ValueError, jwt.PyJWTError) as exc:
                 raise KeyDiscoveryFailure from exc
             self._loaded_at = time.monotonic()
         return self._keys.get(kid)
