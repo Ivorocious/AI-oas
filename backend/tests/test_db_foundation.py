@@ -18,6 +18,8 @@ EXPECTED_TABLES = {
     "inbound_deliveries",
     "outbox_messages",
     "service_requests",
+    "application_actors",
+    "application_actor_role_assignments",
 }
 
 
@@ -38,7 +40,7 @@ def test_engine_and_session_construction_do_not_connect(
     engine.dispose()
 
 
-def test_model_metadata_contains_exactly_six_application_tables() -> None:
+def test_model_metadata_contains_exactly_eight_application_tables() -> None:
     assert set(Base.metadata.tables) == EXPECTED_TABLES
 
 

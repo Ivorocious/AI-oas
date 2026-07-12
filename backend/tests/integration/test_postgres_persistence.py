@@ -25,6 +25,8 @@ EXPECTED_APPLICATION_TABLES = {
     "contacts",
     "inbound_deliveries",
     "outbox_messages",
+    "application_actors",
+    "application_actor_role_assignments",
     "service_requests",
 }
 
@@ -188,7 +190,7 @@ def test_upgrade_after_downgrade_succeeds(migrated_engine: Engine) -> None:
 
     with migrated_engine.connect() as database_connection:
         revision = database_connection.scalar(text("SELECT version_num FROM alembic_version"))
-    assert revision == "0002_atomic_intake_constraints"
+    assert revision == "0003_human_access_foundation"
 
 
 def test_duplicate_accepted_reservation_is_rejected(connection: Connection) -> None:

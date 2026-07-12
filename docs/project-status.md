@@ -8,6 +8,8 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 ha
 
 ## Completed work
 
+- Implemented asymmetric Supabase-compatible human bearer-token verification with lazy bounded JWKS caching, per-request active actor/current-role resolution, and centralized fixed-role authorization. Added Alembic revision `0003_human_access_foundation` for two human-access tables, bringing the application inventory to eight tables.
+- Implemented and validated protected read-only `GET /api/v1/service-requests/{request_id}` for all three approved human roles. It resolves the public-intake `Location` to a closed request/contact projection without writes; the UUID alone grants no access.
 - Implemented and validated atomic public `POST /api/v1/intake/service-requests`: controlled transport/body parsing, closed normalized schemas, canonical SHA-256 hashing, reservation-first concurrency, new/replay/conflict/invalid/malformed outcomes, complete domain/audit/outbox transactions, safe errors, and PII-minimized events. Alembic revision `0002_atomic_intake_constraints` narrowly defers only the circular reservation foreign keys while keeping scope/key uniqueness immediate.
 - Established the accepted-intake persistence foundation: explicit synchronous SQLAlchemy engine/session construction, typed `AI_OPS_DATABASE_URL`, a pinned local PostgreSQL 17 Compose service, deterministic metadata, Alembic revision `0001_intake_persistence`, and exactly six structural tables for delivery, reservation, contact, request, audit, and outbox evidence. Real PostgreSQL tests validate migration round trips, uniqueness, atomic rollback, timezone-aware timestamps, and restrictive evidence deletion.
 - Established the first Phase 2 executable foundation under [`backend/`](../backend/README.md): a FastAPI application factory, typed project-prefixed nonsecret settings, `GET /health`, pytest and Ruff foundations, a reproducible `uv.lock`, and local PowerShell setup/start/check instructions. Validation passes on Python 3.12 without database, network-service, credential, or running-server dependencies.
@@ -34,7 +36,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 ha
 
 ## Active task
 
-None. Atomic public intake is complete.
+None. Human authentication and the protected service-request detail query are complete.
 
 ## Blockers
 
@@ -85,8 +87,8 @@ There is no approved design blocker preventing the next focused Phase 2 task. Im
 
 The following matters will be resolved incrementally within focused Phase 2 and later tasks:
 
-- Exact OpenAPI component schemas, field constraints, generated examples, and contract-test fixtures
-- Supabase project/token configuration, authentication libraries, controlled demo-user setup, and security contract tests
+- Exact OpenAPI component schemas, field constraints, generated examples, and contract-test fixtures for unimplemented routes
+- Hosted Supabase project configuration, controlled demo-user setup, and remaining security contract tests
 - Exact SQL types/migrations, encryption, canonical hash specifications, database roles, physical indexes, retention durations, archival jobs, backup/restore, and recovery operations
 - Real-world calibration and governance of demonstration policy thresholds and controlled activation
 - Final audit event field schemas, redaction projections, and approved retention durations
@@ -97,8 +99,8 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Known limitations
 
-- The implemented backend includes atomic public intake and six-table PostgreSQL persistence. No service-request query, AI interpretation, triage, authentication, n8n, publisher, outbound integration, frontend, or deployment exists.
-- Intake API/event behavior and six-table SQL migrations are executable; remaining contract schemas, persistence representations, Supabase settings, secret storage, and deployed database enforcement are not yet implemented.
+- The implemented backend includes atomic public intake, eight-table PostgreSQL persistence, asymmetric human authentication, and one protected service-request detail query. No AI interpretation, triage, machine authentication, n8n, publisher, proposals/approvals, outbound integration, frontend, or deployment exists.
+- Intake/query API behavior and eight-table SQL migrations are executable; remaining contract schemas, persistence representations, hosted Supabase setup, secret storage, and deployed database enforcement are not yet implemented.
 - The demonstration policies define triage thresholds, failure taxonomy, retry budgets and delays, stale assessment, and uncertain-outcome reconciliation, but none is implemented. Real-world calibration remains deferred.
 - No real email is sent; only a proposed mock adapter is approved for the MVP.
 - The design targets one demonstration organization, one primary intake path, and modest operational scale.
@@ -106,6 +108,6 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Next milestone
 
-**Phase 2 — Service-request query and interpretation foundation.**
+**Phase 2 — AI interpretation persistence and attempt foundation.**
 
-Implement the read-only service-request query required by the intake `Location` header and establish the smallest persistence/API foundation for AI interpretation without yet implementing deterministic triage.
+Establish the smallest immutable AI-interpretation, logical-operation, attempt, and callback-credential persistence needed for a later start/callback flow, without implementing deterministic triage.

@@ -73,10 +73,19 @@ def post(client: TestClient, key: str, payload: dict | str, **headers):
 
 
 def counts(engine: Engine) -> dict[str, int]:
+    intake_tables = {
+        "inbound_deliveries",
+        "accepted_intake_keys",
+        "contacts",
+        "service_requests",
+        "audit_events",
+        "outbox_messages",
+    }
     with engine.connect() as connection:
         return {
             name: connection.scalar(select(func.count()).select_from(table))
             for name, table in Base.metadata.tables.items()
+            if name in intake_tables
         }
 
 
@@ -304,7 +313,7 @@ def test_second_migration_is_applied_and_deferrable(engine) -> None:
                 "AND condeferrable AND condeferred"
             )
         )
-    assert revision == "0002_atomic_intake_constraints"
+    assert revision == "0003_human_access_foundation"
     assert deferred == 2
 
 

@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the fixed MVP identity, authentication, and authorization model for the [API contracts](api-contracts.md), [event/n8n contracts](event-contracts.md), approved [lifecycle state machines](state-machines.md), and [deterministic triage policy](deterministic-decision-policy.md). It is an accepted technical design under [ADR 0003](decisions/0003-authentication-and-role-permissions.md), with proposed security-record storage in the [persistence design](persistence-design.md). It is not implemented functionality: no Supabase Auth configuration, middleware, role table, seed user, secret, nonce store, callback credential, migration, or application code exists.
+This document defines the fixed MVP identity, authentication, and authorization model for the [API contracts](api-contracts.md), [event/n8n contracts](event-contracts.md), approved [lifecycle state machines](state-machines.md), and [deterministic triage policy](deterministic-decision-policy.md). Asymmetric human bearer-token verification, application actor/current-role lookup, and authorization of the protected service-request detail query are implemented. Real hosted Supabase configuration, demo-user provisioning, role-management commands, machine HMAC authentication, nonce storage, callback credentials, and remaining protected commands/queries are not implemented.
 
 The MVP serves one demonstration organization. It uses fixed roles and a centralized permission map rather than editable policies or enterprise RBAC.
 
@@ -281,4 +281,4 @@ Canonical audit and telemetry never store bearer tokens, passwords, HMAC secrets
 
 ## Deferred implementation decisions
 
-The persistence design now defines proposed actor/role records, nonce uniqueness/retention, proposal attribution, callback hashes/expiry, machine metadata, audit/outbox storage, and database access boundaries. Exact libraries, SQL migrations, Supabase project settings, HTTP middleware, secret manager, token lifetimes, and setup instructions remain deferred and cannot weaken this model.
+The human JWT library, actor/role migration, protected dependency, and local setup are implemented. Hosted Supabase project settings, demo provisioning, role-management APIs, nonce/callback/machine authentication, secret management, and remaining protected boundaries remain deferred and cannot weaken this model.

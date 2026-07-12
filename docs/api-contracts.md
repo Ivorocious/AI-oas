@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the approved HTTP contracts for the MVP. `POST /api/v1/intake/service-requests` is implemented with its public transport, validation, idempotency, audit, and outbox behavior. The remaining commands and all queries are unimplemented; authentication middleware and n8n workflows are also unimplemented. The contract continues to apply the approved domain, lifecycle, event, authorization, persistence, and deterministic-policy designs.
+This document defines the approved HTTP contracts for the MVP. `POST /api/v1/intake/service-requests` and the protected `GET /api/v1/service-requests/{request_id}` detail query are implemented. Remaining commands and queries, machine authentication, and n8n workflows are unimplemented. The contract continues to apply the approved domain, lifecycle, event, authorization, persistence, and deterministic-policy designs.
 
 The proposed prefix is `/api/v1`. Commands may change canonical state; queries are read-only. FastAPI is the only authoritative command boundary. The frontend and n8n call these contracts and never write canonical database state directly.
 
@@ -86,7 +86,7 @@ Command-specific results add identifiers, lifecycle summaries, or attempt refere
 
 `POST /api/v1/intake/service-requests`
 
-Required transport inputs are `Content-Type: application/json`, `Idempotency-Key`, and a JSON body. `X-Correlation-ID` is optional. The implemented intake endpoint uses an executable closed schema with bounded field lengths, normalized contact inputs, channel/contact consistency, and bounded service-request description/location/timing fields. Exact schemas for remaining commands and queries remain deferred.
+Required transport inputs are `Content-Type: application/json`, `Idempotency-Key`, and a JSON body. `X-Correlation-ID` is optional. The implemented intake and service-request detail endpoints use executable closed schemas. Exact schemas for unimplemented commands and queries remain deferred.
 
 ### Outcomes
 

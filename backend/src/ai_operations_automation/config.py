@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import PostgresDsn, field_validator
+from pydantic import AnyHttpUrl, Field, PostgresDsn, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     database_url: PostgresDsn = PostgresDsn(
         "postgresql+psycopg://ai_ops_local:ai_ops_local_password@127.0.0.1:55432/ai_ops_local"
     )
+    supabase_issuer: AnyHttpUrl = AnyHttpUrl("https://example.supabase.co/auth/v1")
+    supabase_audience: str = "authenticated"
+    supabase_jwks_url: AnyHttpUrl = AnyHttpUrl(
+        "https://example.supabase.co/auth/v1/.well-known/jwks.json"
+    )
+    jwks_cache_seconds: int = Field(default=300, ge=30, le=3600)
 
     @field_validator("app_name")
     @classmethod

@@ -6,7 +6,7 @@ The product remains configurable across service companies instead of assuming a 
 
 ## Status
 
-Phase 0 — Product Definition is complete. Phase 1 — Technical Design and Engineering Foundation is complete. Phase 2 — Executable Foundation is underway. FastAPI, `GET /health`, PostgreSQL migrations, and atomic `POST /api/v1/intake/service-requests` behavior are implemented and validated.
+Phase 0 — Product Definition is complete. Phase 1 — Technical Design and Engineering Foundation is complete. Phase 2 — Executable Foundation is underway. FastAPI, `GET /health`, PostgreSQL migrations, atomic public intake, asymmetric human bearer authentication, and the protected service-request detail query are implemented and validated.
 
 - [Backend setup, startup, and validation](backend/README.md)
 
@@ -30,4 +30,4 @@ Phase 0 — Product Definition is complete. Phase 1 — Technical Design and Eng
 
 ## Implementation honesty
 
-The repository now implements atomic public intake for new acceptance, replay, conflict, invalid input, and malformed JSON with audit/outbox persistence. It does not yet implement service-request queries, AI interpretation, deterministic triage, duplicate detection, authentication, n8n, outbox publishing, outbound integration, frontend, or deployment. Remaining Phase 1 contracts stay approved designs until implemented by focused slices.
+The repository now implements atomic public intake plus application-controlled human actor/role authorization for `GET /api/v1/service-requests/{request_id}`. It does not yet implement AI interpretation, deterministic triage, duplicate detection, machine HMAC authentication, n8n, outbox publishing, proposals/approvals, outbound integration, frontend, or deployment. Remaining Phase 1 contracts stay approved designs until implemented by focused slices.

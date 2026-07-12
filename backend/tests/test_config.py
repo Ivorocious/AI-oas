@@ -23,6 +23,16 @@ def test_database_url_environment_variable_override(monkeypatch: pytest.MonkeyPa
     assert str(settings.database_url) == database_url
 
 
+def test_supabase_verifier_settings_are_project_prefixed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AI_OPS_SUPABASE_AUDIENCE", "local-human-audience")
+    monkeypatch.setenv("AI_OPS_JWKS_CACHE_SECONDS", "600")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.supabase_audience == "local-human-audience"
+    assert settings.jwks_cache_seconds == 600
+
+
 def test_unknown_dotenv_configuration_is_rejected(tmp_path: Path) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text("AI_OPS_UNKNOWN_SETTING=unexpected\n", encoding="utf-8")

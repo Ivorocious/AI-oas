@@ -1,6 +1,6 @@
 # Backend executable foundation
 
-This directory contains the runnable FastAPI foundation, `GET /health`, PostgreSQL/SQLAlchemy/Alembic persistence, and atomic public service-request intake.
+This directory contains the runnable FastAPI foundation, `GET /health`, PostgreSQL/SQLAlchemy/Alembic persistence, atomic public intake, and a human-authenticated service-request detail query.
 
 ## First setup
 
@@ -13,6 +13,8 @@ uv run alembic upgrade head
 ```
 
 The `.env` file is local configuration and must not be committed. The committed `.env.example` contains only nonproduction defaults matching the local Compose service. PostgreSQL is exposed on `127.0.0.1:55432` to avoid the conventional local port. Compose is for local development and integration testing only; no production Supabase project is configured.
+
+The `AI_OPS_SUPABASE_ISSUER`, `AI_OPS_SUPABASE_AUDIENCE`, `AI_OPS_SUPABASE_JWKS_URL`, and `AI_OPS_JWKS_CACHE_SECONDS` values configure asymmetric access-token verification. The committed values are placeholders. Never commit a real token, private key, JWT secret, Supabase service-role key, or user identifier. Tests use local/fake keys and require no hosted Supabase project.
 
 ## Run the API
 
@@ -58,6 +60,8 @@ uv run ruff format --check .
 
 Integration tests require the Compose PostgreSQL service. Foundation tests do not.
 
+Public intake remains unauthenticated. `GET /api/v1/service-requests/{request_id}` requires a valid bearer token whose verified Supabase subject maps to an active local application actor with a current allowed role. The intake `Location` UUID alone grants no read access.
+
 ## Migration lifecycle
 
 ```powershell
@@ -66,6 +70,6 @@ uv run alembic upgrade head
 docker compose down
 ```
 
-The migrations create exactly six application tables: `inbound_deliveries`, `accepted_intake_keys`, `contacts`, `service_requests`, `audit_events`, and `outbox_messages`. PostgreSQL foreign keys, stable-value checks, positive-version checks, immediate reservation uniqueness, and narrowly deferred circular references support atomic new acceptance, replay, conflict, audit, and outbox writes.
+The migrations create six accepted-intake/evidence tables plus two human-access tables (`application_actors` and `application_actor_role_assignments`), for eight application tables total. PostgreSQL constraints preserve actor status, positive versions, fixed roles, append-oriented role intervals, and one open assignment per actor.
 
-The public intake endpoint is implemented without authentication as approved. No service-request query, AI interpretation, deterministic triage, n8n workflow, outbound adapter, publisher, or frontend exists. `/health` remains database-independent and is not a readiness check.
+The public intake endpoint is implemented without authentication as approved, while service-request detail is protected. No AI interpretation, deterministic triage, machine HMAC, n8n workflow, outbound adapter, publisher, proposal/approval flow, or frontend exists. `/health` remains database- and JWKS-independent and is not a readiness check.
