@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the fixed MVP identity, authentication, and authorization model. Human access is implemented, and reusable WorkflowService HMAC verification, machine identity/external credential metadata, and database nonce replay protection now exist. No production machine command uses the dependency. Credential rotation, callback plaintext issuance/authentication, non-intake command idempotency, AI start/retry, attempt start, result callbacks, EventPublisher execution, and hosted secret-manager integration remain unimplemented.
+This document defines the fixed MVP identity, authentication, and authorization model. Human access, reusable WorkflowService HMAC verification, machine identity/external credential metadata, database nonce replay protection, and reusable command idempotency now exist. No production machine business command uses them. Credential rotation, callback plaintext issuance/authentication, AI start/retry, attempt start, result callbacks, EventPublisher execution, and hosted secret-manager integration remain unimplemented.
 
 The MVP serves one demonstration organization. It uses fixed roles and a centralized permission map rather than editable policies or enterprise RBAC.
 
@@ -76,7 +76,7 @@ SHA256_BODY_DIGEST
 - Body digest is lowercase hexadecimal SHA-256 of the exact transmitted body bytes; an empty body uses the SHA-256 digest of empty bytes.
 - `X-Service-Signature` uses one configured encoding and is compared in constant time after the expected signature is computed.
 
-The backend accepts a maximum clock skew of five minutes in the proposed MVP. It records each accepted nonce per service for at least the skew window plus processing margin and rejects reuse. Exact nonce persistence and cleanup belong to the next persistence design.
+The backend accepts a maximum clock skew of five minutes in the proposed MVP. Exact nonce persistence and reuse rejection are implemented per service for the configured retention window. Controlled nonce cleanup remains unimplemented.
 
 HMAC secrets are stored in n8n credentials or environment/secret configuration and in backend secret configuration outside Git. Each service identity and environment has separate credentials. Rotation uses a short, controlled overlap in which current and immediately previous credentials can be verified, followed by prompt retirement; service disablement fails closed. Raw secrets and signatures are never logged.
 
@@ -281,4 +281,4 @@ Canonical audit and telemetry never store bearer tokens, passwords, HMAC secrets
 
 ## Deferred implementation decisions
 
-Human authentication plus reusable WorkflowService HMAC verification and nonce persistence are implemented. Hosted secret-manager integration, machine credential rotation, callback-credential plaintext issuance/authentication, non-intake command idempotency, AI commands/callbacks, EventPublisher execution, demo provisioning, and remaining protected boundaries remain deferred.
+Human authentication, reusable WorkflowService HMAC verification, nonce persistence, and command-idempotency infrastructure are implemented. No machine business command uses command idempotency yet. Hosted secret-manager integration, machine credential rotation, callback-credential plaintext issuance/authentication, AI commands/callbacks, EventPublisher execution, demo provisioning, and remaining protected boundaries remain deferred.

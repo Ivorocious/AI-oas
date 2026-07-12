@@ -72,7 +72,7 @@ uv run alembic upgrade head
 docker compose down
 ```
 
-The migrations create fifteen application tables: six intake/evidence, two human-access, four AI execution/interpretation, and three machine-security tables. The machine additions are `machine_identities`, `machine_credential_versions`, and `machine_request_nonces`.
+The migrations create sixteen application tables: six intake/evidence, two human-access, four AI execution/interpretation, three machine-security tables, and `command_idempotency_records`.
 
 These four tables are structural foundations only. No real AI provider is called, no callback plaintext is created or stored, and integration tests use synthetic hashes rather than credentials.
 
@@ -80,4 +80,6 @@ WorkflowService authentication infrastructure uses `X-Service-ID`, `X-Service-Ti
 
 Machine secrets are resolved through an injected external resolver from stored nonsecret references. No real secret belongs in `.env` or Git; integration tests use synthetic in-memory bytes. No production WorkflowService route uses this dependency yet.
 
-The public intake endpoint and protected request detail remain as documented. Machine HMAC and nonce infrastructure exists but is unattached to production routes. No AI start/callback runtime, provider integration, credential rotation, command idempotency, n8n workflow, publisher, or frontend exists. `/health` remains database-, JWKS-, and secret-resolver-independent.
+Reusable non-intake command idempotency accepts exactly one 8–128-character visible-ASCII `Idempotency-Key`. Raw keys are never stored; SHA-256 digests are scoped by trusted actor class/ID, command intent, backend route template, and target type/ID. The complete validated closed command model is canonically bound after validation. Exact completed replay returns the stored safe result without execution, while a changed body returns `409 COMMAND_IDEMPOTENCY_CONFLICT`. Secret-bearing records store only safe callback-credential metadata and `PlaintextIssued`; exact replay projects `AlreadyIssued` in memory and returns no plaintext.
+
+The public intake endpoint and protected request detail remain as documented. Machine HMAC, nonce, and command-idempotency infrastructure exists but is unattached to production commands. No AI start/callback runtime, callback plaintext generation, provider integration, credential rotation, n8n workflow, publisher, or frontend exists. `/health` remains database-, JWKS-, and secret-resolver-independent.

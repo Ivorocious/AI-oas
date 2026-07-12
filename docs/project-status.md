@@ -8,6 +8,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 ha
 
 ## Completed work
 
+- Implemented and validated the reusable non-intake command-idempotency foundation: migration `0007_command_idempotency_foundation`, trusted full-scope reservations, strict key digesting, canonical validated-body binding, savepoint race resolution, safe completion/replay/conflict behavior, and non-secret one-time-delivery receipt metadata. No production command was added.
 - Implemented and validated reusable WorkflowService HMAC-SHA256 verification, application-controlled machine identity/external credential metadata, current/previous rotation overlap, and committed nonce replay protection. No production machine route or command was added.
 - Implemented and validated the AI-only execution persistence foundation: immutable logical-operation intent, bounded integration attempts, hash-only callback-credential metadata, immutable interpretations, and the nullable service-request current-interpretation reference. No runtime AI command or callback was added.
 - Implemented asymmetric Supabase-compatible human bearer-token verification with lazy bounded JWKS caching, per-request active actor/current-role resolution, and centralized fixed-role authorization. Added Alembic revision `0003_human_access_foundation` for two human-access tables, bringing the application inventory to eight tables.
@@ -38,7 +39,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 ha
 
 ## Active task
 
-None. The WorkflowService authentication and nonce foundation is complete.
+None. The non-intake command-idempotency foundation is complete.
 
 ## Blockers
 
@@ -101,7 +102,7 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Known limitations
 
-- The backend includes atomic intake, human authentication, protected request detail, fifteen-table persistence, and reusable WorkflowService HMAC/nonce authentication. No production WorkflowService business command, command idempotency, AI runtime, callback route, provider integration, n8n workflow, publisher, frontend, or deployment exists.
+- The backend includes atomic intake, human authentication, protected request detail, sixteen-table persistence, reusable WorkflowService HMAC/nonce authentication, and reusable non-intake command idempotency. No production WorkflowService business command, AI runtime, callback route, callback plaintext generation, provider integration, n8n workflow, publisher, frontend, or deployment exists.
 - No callback plaintext, provider request/response body, or real AI credential is created or stored.
 - The demonstration policies define triage thresholds, failure taxonomy, retry budgets and delays, stale assessment, and uncertain-outcome reconciliation, but none is implemented. Real-world calibration remains deferred.
 - No real email is sent; only a proposed mock adapter is approved for the MVP.
@@ -110,6 +111,6 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Next milestone
 
-**Phase 2 — Non-intake command-idempotency foundation.**
+**Phase 2 — Start AI interpretation command.**
 
-Implement scoped reservation, canonical body binding, safe replay results, conflict handling, and secret-delivery receipt metadata required before the first AI start command.
+Implement the first guarded business command that atomically creates the AI logical operation, `Pending` attempt, callback-credential hash, safe audit/outbox evidence, and idempotency result while issuing plaintext once only to the assigned WorkflowService context.

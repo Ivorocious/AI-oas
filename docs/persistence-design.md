@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the approved Phase 1 persistence design. Fifteen of 27 representations are structurally implemented, adding `machine_identities`, `machine_credential_versions`, and `machine_request_nonces` to the prior twelve. Twelve representations remain unimplemented. Credential values remain external; nonce insertion after verified signatures is executable, while cleanup/retention jobs and command idempotency remain unimplemented.
+This document defines the approved Phase 1 persistence design. Sixteen of 27 representations are structurally implemented, including `command_idempotency_records`; eleven representations remain unimplemented. Credential values remain external. Nonce insertion and transaction-local command `Processing`/`Completed` reservation, replay, conflict, and safe completion are executable, while nonce/record cleanup and integration with a production domain command remain unimplemented.
 
 The names below are proposed relational names, not finalized SQL identifiers. Exact data types, lengths, encryption facilities, partitioning, and physical storage parameters remain migration-design decisions.
 
@@ -375,7 +375,9 @@ Migrations `0001_intake_persistence` through `0003_human_access_foundation` impl
 
 Migration `0005_ai_execution_constraint_hardening` makes callback workflow scope nonblank and defers the replacement self-FK so one old-to-new hash-only credential transition can commit atomically. Same-attempt identity, exact next-version sequencing, deadline, authority, and plaintext issuance remain future FastAPI command guards; no replacement runtime is implemented.
 
-Migration `0006_workflow_authentication_foundation` adds machine identities, external credential-version metadata, and nonce replay evidence. Secrets remain external, and command idempotency and nonce cleanup remain future work.
+Migration `0006_workflow_authentication_foundation` adds machine identities, external credential-version metadata, and nonce replay evidence. Secrets remain external and nonce cleanup remains future work.
+
+Migration `0007_command_idempotency_foundation` adds the scoped non-intake command reservation, canonical-body binding, safe replay snapshot, and one-time secret-delivery receipt metadata. Domain-command integration and automated retention remain future work.
 
 1. Required extensions, fixed enums, domains, and foundational types.
 2. `application_actors`, role assignments, `machine_identities`, and credential metadata.
@@ -394,7 +396,7 @@ Enum value removal/renaming, narrowing a populated column, adding uniqueness to 
 
 ## Future persistence-focused test requirements
 
-Executable new/replay/conflict/invalid/malformed, concurrency, migration, constraint, rollback, timezone, and evidence-retention tests now cover the implemented intake slice. The remaining items are requirements for later capabilities.
+Executable migration, constraint, transaction, replay/conflict, rollback, secret-receipt, and concurrency tests now cover the reusable command-idempotency foundation in addition to intake. The remaining items are requirements for later domain capabilities.
 
 1. Concurrent accepted intake with the same key and same canonical payload creates one request and one accepted replay.
 2. Concurrent accepted intake with the same key and different payload creates one request and one conflict.
@@ -437,4 +439,4 @@ Executable new/replay/conflict/invalid/malformed, concurrency, migration, constr
 
 ## Deferred implementation choices
 
-Intake idempotency-key hashing and normalized canonical-payload hashing are implemented with SHA-256. Hashing specifications for future commands, proposals, providers, and policies, plus encryption/key management, remaining SQL types/indexes, triggers/functions, transaction isolation, pooling, partitioning, backup/restore, retention, Supabase settings, and later migration tooling remain deferred. None may weaken the approved guarantees.
+Intake key/payload hashing and validated closed command-body hashing are implemented with SHA-256. Hashing specifications for proposals, providers, and policies, plus encryption/key management, remaining SQL types/indexes, triggers/functions, transaction isolation, pooling, partitioning, backup/restore, retention, Supabase settings, and later migration tooling remain deferred. None may weaken the approved guarantees.

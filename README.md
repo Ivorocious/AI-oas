@@ -6,7 +6,7 @@ The product remains configurable across service companies instead of assuming a 
 
 ## Status
 
-Phase 0 and Phase 1 are complete; Phase 2 is underway. The executable backend now includes intake, human access, AI execution persistence, structural machine identities/external credential metadata, reusable WorkflowService HMAC verification, and database-backed nonce replay protection.
+Phase 0 and Phase 1 are complete; Phase 2 is underway. The executable backend now includes intake, human access, AI execution persistence, structural machine identities/external credential metadata, reusable WorkflowService HMAC verification, database-backed nonce replay protection, and reusable non-intake command-idempotency infrastructure.
 
 - [Backend setup, startup, and validation](backend/README.md)
 
@@ -30,4 +30,4 @@ Phase 0 and Phase 1 are complete; Phase 2 is underway. The executable backend no
 
 ## Implementation honesty
 
-No WorkflowService business command, AI start/callback endpoint, machine secret storage, non-intake command idempotency, provider integration, deterministic triage, n8n, publisher, frontend, or deployment exists yet.
+No production business command uses command idempotency yet. No AI start/callback endpoint, callback plaintext generation, machine secret storage, provider integration, deterministic triage, n8n, publisher, frontend, or deployment exists.
