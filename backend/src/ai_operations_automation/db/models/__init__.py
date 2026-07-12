@@ -1,5 +1,11 @@
-"""The six models in the accepted-intake persistence foundation."""
+"""Deliberately bounded application persistence models."""
 
+from ai_operations_automation.db.models.ai_execution import (
+    AiInterpretation,
+    AttemptCallbackCredential,
+    IntegrationAttempt,
+    LogicalOperation,
+)
 from ai_operations_automation.db.models.evidence import AuditEvent, OutboxMessage
 from ai_operations_automation.db.models.identity import (
     ApplicationActor,
@@ -14,11 +20,15 @@ from ai_operations_automation.db.models.intake import (
 
 __all__ = [
     "AcceptedIntakeKey",
+    "AiInterpretation",
     "ApplicationActor",
     "ApplicationActorRoleAssignment",
     "AuditEvent",
+    "AttemptCallbackCredential",
     "Contact",
     "InboundDelivery",
+    "IntegrationAttempt",
+    "LogicalOperation",
     "OutboxMessage",
     "ServiceRequest",
 ]

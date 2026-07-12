@@ -2,9 +2,9 @@
 
 ## Status and scope
 
-This documentation-only Phase 1 design defines deterministic failure classification, retry eligibility, bounded recovery, stale-attempt assessment, and uncertain outbound reconciliation. FastAPI remains the canonical command and policy boundary; Postgres remains canonical operational state; WorkflowService and providers submit evidence but never choose state or eligibility. The outbound adapter remains mock-only and sends no real email.
+This Phase 1 design defines deterministic failure classification, retry eligibility, bounded recovery, stale-attempt assessment, and uncertain outbound reconciliation. A bounded base AI attempt structure is implemented. Failure-policy versions, assessment, retry calculations, stale assessment, reconciliation, and recovery commands remain unimplemented.
 
-This policy does not implement code, SQL, migrations, tests, workflows, adapters, workers, Supabase settings, deployment, monitoring, or outbox-publisher retry/dead-letter behavior.
+No runtime failure/recovery workflow, adapter, worker, or publisher behavior is implemented.
 
 ## Immutable `FailureRecoveryPolicyVersion`
 

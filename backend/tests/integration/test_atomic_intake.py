@@ -313,7 +313,7 @@ def test_second_migration_is_applied_and_deferrable(engine) -> None:
                 "AND condeferrable AND condeferred"
             )
         )
-    assert revision == "0003_human_access_foundation"
+    assert revision == "0004_ai_execution_foundation"
     assert deferred == 2
 
 

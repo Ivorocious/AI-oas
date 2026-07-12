@@ -209,6 +209,16 @@ class ServiceRequest(Base):
     current_queue: Mapped[str | None] = mapped_column(String(32))
     location_context: Mapped[str | None] = mapped_column(Text)
     timing_preference: Mapped[str | None] = mapped_column(Text)
+    current_interpretation_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "ai_interpretations.id",
+            name="fk_service_request_current_interpretation",
+            ondelete="RESTRICT",
+            use_alter=True,
+        ),
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

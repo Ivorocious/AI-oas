@@ -20,6 +20,17 @@ EXPECTED_TABLES = {
     "service_requests",
     "application_actors",
     "application_actor_role_assignments",
+    "logical_operations",
+    "integration_attempts",
+    "attempt_callback_credentials",
+    "ai_interpretations",
+}
+
+NEW_AI_TABLES = {
+    "logical_operations",
+    "integration_attempts",
+    "attempt_callback_credentials",
+    "ai_interpretations",
 }
 
 
@@ -40,8 +51,9 @@ def test_engine_and_session_construction_do_not_connect(
     engine.dispose()
 
 
-def test_model_metadata_contains_exactly_eight_application_tables() -> None:
+def test_model_metadata_contains_exactly_twelve_application_tables() -> None:
     assert set(Base.metadata.tables) == EXPECTED_TABLES
+    assert NEW_AI_TABLES <= set(Base.metadata.tables)
 
 
 def test_constraint_and_index_names_are_deterministic() -> None:
@@ -69,3 +81,21 @@ def test_importing_main_does_not_connect_to_postgres(monkeypatch) -> None:
     reloaded = importlib.reload(main)
 
     assert reloaded.app.title == "AI Operations Automation API"
+
+
+def test_persistence_metadata_has_no_plaintext_or_secret_column_names() -> None:
+    forbidden = {
+        "plaintext",
+        "raw_token",
+        "access_token",
+        "refresh_token",
+        "api_key",
+        "secret_value",
+        "private_key",
+    }
+    assert not {
+        column.name
+        for table in Base.metadata.tables.values()
+        for column in table.columns
+        if column.name in forbidden
+    }

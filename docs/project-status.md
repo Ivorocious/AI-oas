@@ -8,6 +8,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 ha
 
 ## Completed work
 
+- Implemented and validated the AI-only execution persistence foundation: immutable logical-operation intent, bounded integration attempts, hash-only callback-credential metadata, immutable interpretations, and the nullable service-request current-interpretation reference. No runtime AI command or callback was added.
 - Implemented asymmetric Supabase-compatible human bearer-token verification with lazy bounded JWKS caching, per-request active actor/current-role resolution, and centralized fixed-role authorization. Added Alembic revision `0003_human_access_foundation` for two human-access tables, bringing the application inventory to eight tables.
 - Implemented and validated protected read-only `GET /api/v1/service-requests/{request_id}` for all three approved human roles. It resolves the public-intake `Location` to a closed request/contact projection without writes; the UUID alone grants no access.
 - Implemented and validated atomic public `POST /api/v1/intake/service-requests`: controlled transport/body parsing, closed normalized schemas, canonical SHA-256 hashing, reservation-first concurrency, new/replay/conflict/invalid/malformed outcomes, complete domain/audit/outbox transactions, safe errors, and PII-minimized events. Alembic revision `0002_atomic_intake_constraints` narrowly defers only the circular reservation foreign keys while keeping scope/key uniqueness immediate.
@@ -36,7 +37,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 ha
 
 ## Active task
 
-None. Human authentication and the protected service-request detail query are complete.
+None. The AI execution persistence foundation is complete.
 
 ## Blockers
 
@@ -99,8 +100,8 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Known limitations
 
-- The implemented backend includes atomic public intake, eight-table PostgreSQL persistence, asymmetric human authentication, and one protected service-request detail query. No AI interpretation, triage, machine authentication, n8n, publisher, proposals/approvals, outbound integration, frontend, or deployment exists.
-- Intake/query API behavior and eight-table SQL migrations are executable; remaining contract schemas, persistence representations, hosted Supabase setup, secret storage, and deployed database enforcement are not yet implemented.
+- The backend includes atomic intake, human authentication, protected request detail, and twelve-table persistence including AI-only execution evidence. No AI runtime, triage, machine authentication, n8n, publisher, proposals/approvals, outbound integration, frontend, or deployment exists.
+- No callback plaintext, provider request/response body, or real AI credential is created or stored.
 - The demonstration policies define triage thresholds, failure taxonomy, retry budgets and delays, stale assessment, and uncertain-outcome reconciliation, but none is implemented. Real-world calibration remains deferred.
 - No real email is sent; only a proposed mock adapter is approved for the MVP.
 - The design targets one demonstration organization, one primary intake path, and modest operational scale.
@@ -108,6 +109,6 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Next milestone
 
-**Phase 2 — AI interpretation persistence and attempt foundation.**
+**Phase 2 — WorkflowService authentication and command-idempotency foundation.**
 
-Establish the smallest immutable AI-interpretation, logical-operation, attempt, and callback-credential persistence needed for a later start/callback flow, without implementing deterministic triage.
+Implement machine identities, HMAC credential metadata, nonce replay protection, and non-intake command idempotency required before exposing AI start or callback commands.

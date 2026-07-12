@@ -72,6 +72,8 @@ uv run alembic upgrade head
 docker compose down
 ```
 
-The migrations create six accepted-intake/evidence tables plus two human-access tables (`application_actors` and `application_actor_role_assignments`), for eight application tables total. PostgreSQL constraints preserve actor status, positive versions, fixed roles, append-oriented role intervals, and one open assignment per actor.
+The migrations create six accepted-intake/evidence tables, two human-access tables, and four AI execution/interpretation tables, for twelve application tables total. The AI-only additions are `logical_operations`, `integration_attempts`, `attempt_callback_credentials`, and `ai_interpretations`; newly accepted requests keep a null current-interpretation reference.
 
-The public intake endpoint is implemented without authentication as approved, while service-request detail is protected. No AI interpretation, deterministic triage, machine HMAC, n8n workflow, outbound adapter, publisher, proposal/approval flow, or frontend exists. `/health` remains database- and JWKS-independent and is not a readiness check.
+These four tables are structural foundations only. No real AI provider is called, no callback plaintext is created or stored, and integration tests use synthetic hashes rather than credentials.
+
+The public intake endpoint and protected request detail remain as documented. No AI start/callback runtime, provider integration, credential issuance, deterministic triage, machine HMAC, n8n workflow, publisher, proposal/approval flow, or frontend exists. `/health` remains database- and JWKS-independent.

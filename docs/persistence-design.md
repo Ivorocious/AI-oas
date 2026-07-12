@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the approved Phase 1 persistence design. Six intake/audit/outbox representations, two human-access representations, atomic public intake, and the protected request-detail read are implemented through SQLAlchemy and Alembic; the remaining 19 representations, publisher behavior, hosted Supabase configuration, and database-role hardening remain unimplemented. The detailed design remains authoritative for future focused slices.
+This document defines the approved Phase 1 persistence design. Twelve representations are now structural SQLAlchemy/Alembic implementations: the prior eight plus AI-only `logical_operations`, `integration_attempts`, `attempt_callback_credentials`, and `ai_interpretations`. The remaining 15 representations and outbound extensions are unimplemented. Cross-row success, request ownership, copied-configuration equality, and terminal-callback guards remain future FastAPI transaction responsibilities.
 
 The names below are proposed relational names, not finalized SQL identifiers. Exact data types, lengths, encryption facilities, partitioning, and physical storage parameters remain migration-design decisions.
 
@@ -371,7 +371,7 @@ Core requests, decision-policy versions, routing decisions, duplicate candidate 
 
 ## Proposed migration ordering
 
-Migrations `0001_intake_persistence` and `0002_atomic_intake_constraints` implement the six-table intake foundation and narrowly deferred reservation foreign keys. Migration `0003_human_access_foundation` implements application actors and append-oriented active-role assignments. The remaining safe future sequence is:
+Migrations `0001_intake_persistence` through `0003_human_access_foundation` implement intake and human access. Migration `0004_ai_execution_foundation` implements the AI-only logical-operation, attempt, callback-credential, and interpretation structures. The remaining safe future sequence is:
 
 1. Required extensions, fixed enums, domains, and foundational types.
 2. `application_actors`, role assignments, `machine_identities`, and credential metadata.

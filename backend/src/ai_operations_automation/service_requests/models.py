@@ -33,7 +33,7 @@ class ContactView(BaseModel):
 
 
 class ActiveReferences(BaseModel):
-    current_interpretation_id: None = None
+    current_interpretation_id: uuid.UUID | None = None
     current_routing_decision_id: None = None
     active_proposed_action_id: None = None
 

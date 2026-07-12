@@ -51,6 +51,8 @@ def query_service_request(
                 preferred_channel=contact.preferred_channel,
                 version=contact.version,
             ),
-            active_references=ActiveReferences(),
+            active_references=ActiveReferences(
+                current_interpretation_id=request.current_interpretation_id
+            ),
         ),
     )

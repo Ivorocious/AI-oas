@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the approved HTTP contracts for the MVP. `POST /api/v1/intake/service-requests` and the protected `GET /api/v1/service-requests/{request_id}` detail query are implemented. Remaining commands and queries, machine authentication, and n8n workflows are unimplemented. The contract continues to apply the approved domain, lifecycle, event, authorization, persistence, and deterministic-policy designs.
+This document defines the approved HTTP contracts for the MVP. Public intake and the protected request-detail query are implemented, and AI execution persistence now exists. The start-AI command, callbacks, attempt/interpretation queries, remaining commands/queries, machine authentication, and n8n workflows are unimplemented.
 
 The proposed prefix is `/api/v1`. Commands may change canonical state; queries are read-only. FastAPI is the only authoritative command boundary. The frontend and n8n call these contracts and never write canonical database state directly.
 

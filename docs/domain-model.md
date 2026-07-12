@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the approved, implementation-neutral domain model for the MVP. It refines the [product brief](product-brief.md), [proposed architecture](architecture.md), [lifecycle state machines](state-machines.md), and [deterministic triage policy](deterministic-decision-policy.md); the proposed relational representation is defined separately in the [persistence design](persistence-design.md). No database schema, migration, ORM model, API, or application component has been implemented.
+This document defines the approved domain model for the MVP. Intake, human access, the protected request query, and the AI execution/interpretation persistence foundation are implemented. Lifecycle commands, provider workflows, deterministic decisions, proposals, approvals, and remaining concepts are not implemented.
 
 All approved concept names are retained. `proposal_series_id` preserves proposal identity across versions, while the persistence design gives `logical_operation_id` a durable support record so attempt and outbound-idempotency invariants can be enforced across retries. `ReviewedFactSet` is an explicitly bounded evidence child for deterministic recalculation, not a new generic business workflow or override entity.
 

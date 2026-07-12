@@ -108,3 +108,17 @@ def test_openapi_documents_protected_query_and_resolves_local_references() -> No
                 walk(child)
 
     walk(schema)
+
+
+def test_route_inventory_is_unchanged_and_interpretation_reference_is_nullable_uuid() -> None:
+    schema = create_app(Settings(_env_file=None)).openapi()
+    assert set(schema["paths"]) == {
+        "/health",
+        "/api/v1/intake/service-requests",
+        "/api/v1/service-requests/{request_id}",
+    }
+    field = schema["components"]["schemas"]["ActiveReferences"]["properties"][
+        "current_interpretation_id"
+    ]
+    assert {item.get("type") for item in field["anyOf"]} == {"string", "null"}
+    assert any(item.get("format") == "uuid" for item in field["anyOf"])

@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the fixed MVP identity, authentication, and authorization model for the [API contracts](api-contracts.md), [event/n8n contracts](event-contracts.md), approved [lifecycle state machines](state-machines.md), and [deterministic triage policy](deterministic-decision-policy.md). Asymmetric human bearer-token verification, application actor/current-role lookup, and authorization of the protected service-request detail query are implemented. Real hosted Supabase configuration, demo-user provisioning, role-management commands, machine HMAC authentication, nonce storage, callback credentials, and remaining protected commands/queries are not implemented.
+This document defines the fixed MVP identity, authentication, and authorization model. Human bearer authentication and protected request reads are implemented, and hash-only attempt callback-credential persistence now exists. Credential generation/plaintext issuance, HMAC authentication, nonce validation, replacement commands, callbacks, hosted Supabase provisioning, and remaining protected boundaries are unimplemented.
 
 The MVP serves one demonstration organization. It uses fixed roles and a centralized permission map rather than editable policies or enterprise RBAC.
 
