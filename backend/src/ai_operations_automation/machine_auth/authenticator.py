@@ -8,7 +8,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from fastapi import Request
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -19,7 +19,10 @@ from ai_operations_automation.db.models.machine import (
     MachineRequestNonce,
 )
 from ai_operations_automation.intake.errors import IntakeError
-from ai_operations_automation.machine_auth.canonicalization import canonical_signing_bytes
+from ai_operations_automation.machine_auth.canonicalization import (
+    canonical_signing_bytes,
+    extract_request_target,
+)
 from ai_operations_automation.machine_auth.models import AuthenticatedWorkflowService
 from ai_operations_automation.machine_auth.secrets import (
     MachineSecretResolver,
@@ -102,11 +105,12 @@ class WorkflowServiceAuthenticator:
         )
         nonce = validate_nonce(headers["X-Service-Nonce"])
         supplied_signature = validate_signature(headers["X-Service-Signature"])
+        raw_path, raw_query = extract_request_target(request.scope)
         body = await request.body()
         signing_bytes = canonical_signing_bytes(
             request.method,
-            request.scope.get("raw_path", request.url.path.encode("ascii")),
-            request.scope.get("query_string", b""),
+            raw_path,
+            raw_query,
             headers["X-Service-Timestamp"],
             nonce,
             body,
@@ -123,16 +127,10 @@ class WorkflowServiceAuthenticator:
                 )
                 if identity is None:
                     raise machine_authentication_failure()
-                credentials = session.scalars(
+                verification_set = session.scalars(
                     select(MachineCredentialVersion).where(
                         MachineCredentialVersion.machine_identity_id == identity.id,
-                        or_(
-                            MachineCredentialVersion.status == "Current",
-                            (
-                                (MachineCredentialVersion.status == "Previous")
-                                & (MachineCredentialVersion.previous_verification_until >= now)
-                            ),
-                        ),
+                        MachineCredentialVersion.status.in_(("Current", "Previous")),
                     )
                 ).all()
         except IntakeError:
@@ -141,8 +139,19 @@ class WorkflowServiceAuthenticator:
             raise IntakeError(
                 503, "DEPENDENCY_UNAVAILABLE", "A required dependency is unavailable.", True
             ) from exc
+        current = [item for item in verification_set if item.status == "Current"]
+        previous = [item for item in verification_set if item.status == "Previous"]
+        if len(current) != 1 or len(previous) > 1 or current[0].activated_at > now:
+            raise machine_authentication_failure()
+        if previous and previous[0].activated_at > now:
+            raise machine_authentication_failure()
+        candidates = [current[0]]
+        if previous and previous[0].previous_verification_until >= now:
+            candidates.append(previous[0])
+        if any(item.machine_identity_id != identity.id for item in candidates):
+            raise machine_authentication_failure()
         matches: list[MachineCredentialVersion] = []
-        for credential in credentials:
+        for credential in candidates:
             try:
                 secret = self.secret_resolver.resolve(credential.external_secret_reference)
             except MachineSecretUnavailable as exc:

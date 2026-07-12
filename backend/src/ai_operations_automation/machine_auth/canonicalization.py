@@ -33,6 +33,19 @@ def canonical_path(raw_path: bytes) -> str:
     return re.sub(r"%[0-9A-Fa-f]{2}", lambda match: match.group(0).upper(), path)
 
 
+def extract_request_target(scope: dict) -> tuple[bytes, bytes]:
+    raw_path = scope.get("raw_path")
+    if not isinstance(raw_path, bytes) or not raw_path or not raw_path.startswith(b"/"):
+        raise IntakeError(401, "MACHINE_AUTHENTICATION_FAILED", "Machine authentication failed.")
+    if any(byte < 0x21 or byte > 0x7E for byte in raw_path) or b"?" in raw_path or b"#" in raw_path:
+        raise IntakeError(401, "MACHINE_AUTHENTICATION_FAILED", "Machine authentication failed.")
+    canonical_path(raw_path)
+    raw_query = scope.get("query_string", b"")
+    if not isinstance(raw_query, bytes):
+        raise IntakeError(401, "MACHINE_AUTHENTICATION_FAILED", "Machine authentication failed.")
+    return raw_path, raw_query
+
+
 def _decode_query_component(value: bytes) -> str:
     _reject_malformed_percent(value)
     output = bytearray()

@@ -72,7 +72,7 @@ uv run alembic upgrade head
 docker compose down
 ```
 
-The migrations create six accepted-intake/evidence tables, two human-access tables, and four AI execution/interpretation tables, for twelve application tables total. The AI-only additions are `logical_operations`, `integration_attempts`, `attempt_callback_credentials`, and `ai_interpretations`; newly accepted requests keep a null current-interpretation reference.
+The migrations create fifteen application tables: six intake/evidence, two human-access, four AI execution/interpretation, and three machine-security tables. The machine additions are `machine_identities`, `machine_credential_versions`, and `machine_request_nonces`.
 
 These four tables are structural foundations only. No real AI provider is called, no callback plaintext is created or stored, and integration tests use synthetic hashes rather than credentials.
 

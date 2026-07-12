@@ -7,7 +7,7 @@ from alembic.config import Config
 from fastapi import Depends, Request
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, delete, func, insert, select, text
-from sqlalchemy.exc import OperationalError, SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 
 from ai_operations_automation.app import create_app
 from ai_operations_automation.config import Settings
@@ -29,8 +29,10 @@ SECRET_PREVIOUS = b"synthetic-previous-machine-key"
 class Resolver:
     def __init__(self, values):
         self.values = values
+        self.calls = []
 
     def resolve(self, reference: str) -> bytes:
+        self.calls.append(reference)
         try:
             return self.values[reference]
         except KeyError as exc:
@@ -145,6 +147,13 @@ def assert_rejected(engine, statement):
             connection.execute(statement)
 
 
+def assert_constraint(engine, statement, expected):
+    with pytest.raises(IntegrityError) as captured:
+        with engine.begin() as connection:
+            connection.execute(statement)
+    assert captured.value.orig.diag.constraint_name == expected
+
+
 def seed_current(engine, **identity_overrides):
     identity_id = insert_identity(engine, **identity_overrides)
     credential_id = insert_credential(engine, identity_id)
@@ -239,17 +248,135 @@ def test_previous_uniqueness_and_state_consistency(app_client) -> None:
             )
         ),
     )
-    assert_rejected(
+
+
+def test_machine_credential_uniqueness_constraints_are_isolated(app_client) -> None:
+    _, _, engine = app_client
+    credentials = Base.metadata.tables["machine_credential_versions"]
+    first_identity = insert_identity(engine)
+    second_identity = insert_identity(
+        engine, stable_service_id="workflow.second", display_label="Second workflow"
+    )
+    insert_credential(
+        engine,
+        first_identity,
+        status="Retired",
+        retired_at=NOW,
+    )
+    assert_constraint(
         engine,
         insert(credentials).values(
             **credential_values(
-                identity_id,
-                credential_version=3,
-                external_secret_reference="test/bad-overlap",
-                status="Previous",
-                previous_verification_until=NOW - timedelta(days=2),
+                first_identity,
+                external_secret_reference="test/different",
+                status="Revoked",
+                revoked_at=NOW,
             )
         ),
+        "uq_machine_credential_versions_identity_version",
+    )
+    assert_constraint(
+        engine,
+        insert(credentials).values(
+            **credential_values(
+                second_identity,
+                credential_version=2,
+                external_secret_reference="test/current",
+                status="Retired",
+                retired_at=NOW,
+            )
+        ),
+        "uq_machine_credential_versions_external_reference",
+    )
+    insert_credential(
+        engine,
+        first_identity,
+        credential_version=2,
+        external_secret_reference="test/current-2",
+    )
+    assert_constraint(
+        engine,
+        insert(credentials).values(
+            **credential_values(
+                first_identity,
+                credential_version=3,
+                external_secret_reference="test/current-3",
+            )
+        ),
+        "uq_machine_credential_versions_one_current",
+    )
+    insert_credential(
+        engine,
+        first_identity,
+        credential_version=4,
+        external_secret_reference="test/previous-4",
+        status="Previous",
+        activated_at=NOW - timedelta(days=2),
+        previous_verification_until=NOW + timedelta(minutes=1),
+    )
+    assert_constraint(
+        engine,
+        insert(credentials).values(
+            **credential_values(
+                first_identity,
+                credential_version=5,
+                external_secret_reference="test/previous-5",
+                status="Previous",
+                activated_at=NOW - timedelta(days=3),
+                previous_verification_until=NOW + timedelta(minutes=2),
+            )
+        ),
+        "uq_machine_credential_versions_one_previous",
+    )
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"status": "Retired"},
+        {"status": "Revoked"},
+        {"previous_verification_until": NOW + timedelta(minutes=1)},
+        {"retired_at": NOW},
+        {"revoked_at": NOW},
+        {
+            "status": "Previous",
+            "previous_verification_until": NOW + timedelta(minutes=1),
+            "retired_at": NOW,
+        },
+        {
+            "status": "Previous",
+            "previous_verification_until": NOW + timedelta(minutes=1),
+            "revoked_at": NOW,
+        },
+        {
+            "status": "Previous",
+            "activated_at": NOW,
+            "previous_verification_until": NOW,
+        },
+    ],
+)
+def test_invalid_machine_credential_state_combinations(app_client, overrides) -> None:
+    _, _, engine = app_client
+    identity_id = insert_identity(engine)
+    assert_rejected(
+        engine,
+        insert(Base.metadata.tables["machine_credential_versions"]).values(
+            **credential_values(identity_id, **overrides)
+        ),
+    )
+
+
+def test_valid_retired_and_revoked_credentials_insert(app_client) -> None:
+    _, _, engine = app_client
+    identity_id = insert_identity(engine)
+    insert_credential(engine, identity_id, status="Retired", retired_at=NOW)
+    insert_credential(
+        engine,
+        identity_id,
+        credential_version=2,
+        external_secret_reference="test/revoked",
+        status="Revoked",
+        revoked_at=NOW,
     )
 
 
@@ -447,6 +574,182 @@ def test_previous_after_overlap_fails(app_client) -> None:
     assert response.status_code == 401
 
 
+@pytest.mark.parametrize("credential_state", ["none", "Previous", "Retired", "Revoked"])
+def test_no_effective_current_fails_before_secret_resolution(app_client, credential_state) -> None:
+    app, client, engine = app_client
+    identity_id = insert_identity(engine)
+    if credential_state == "Previous":
+        insert_credential(
+            engine,
+            identity_id,
+            external_secret_reference="test/previous",
+            status="Previous",
+            previous_verification_until=NOW + timedelta(minutes=5),
+        )
+    elif credential_state == "Retired":
+        insert_credential(engine, identity_id, status="Retired", retired_at=NOW)
+    elif credential_state == "Revoked":
+        insert_credential(engine, identity_id, status="Revoked", revoked_at=NOW)
+    resolver = app.state.machine_secret_resolver
+    response = client.post(
+        "/__tests__/workflow-auth",
+        content=b"payload",
+        headers=signed_headers(),
+    )
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "MACHINE_AUTHENTICATION_FAILED"
+    assert resolver.calls == []
+    assert all(
+        detail not in response.text
+        for detail in (credential_state, "credential", "activated", "test/current")
+    )
+    with engine.connect() as connection:
+        assert (
+            connection.scalar(
+                select(func.count()).select_from(Base.metadata.tables["machine_request_nonces"])
+            )
+            == 0
+        )
+
+
+def test_future_activation_fails_closed(app_client) -> None:
+    app, client, engine = app_client
+    identity_id = insert_identity(engine)
+    insert_credential(engine, identity_id, activated_at=NOW + timedelta(microseconds=1))
+    response = client.post("/__tests__/workflow-auth", content=b"payload", headers=signed_headers())
+    assert response.status_code == 401
+    assert app.state.machine_secret_resolver.calls == []
+
+
+def test_current_with_future_previous_fails_closed(app_client) -> None:
+    app, client, engine = app_client
+    identity_id, _ = seed_current(engine)
+    insert_credential(
+        engine,
+        identity_id,
+        credential_version=2,
+        external_secret_reference="test/previous",
+        status="Previous",
+        activated_at=NOW + timedelta(microseconds=1),
+        previous_verification_until=NOW + timedelta(minutes=5),
+    )
+    response = client.post("/__tests__/workflow-auth", content=b"payload", headers=signed_headers())
+    assert response.status_code == 401
+    assert app.state.machine_secret_resolver.calls == []
+
+
+def test_activation_and_previous_overlap_boundaries_are_inclusive(app_client) -> None:
+    _, client, engine = app_client
+    identity_id = insert_identity(engine)
+    insert_credential(engine, identity_id, activated_at=NOW)
+    insert_credential(
+        engine,
+        identity_id,
+        credential_version=2,
+        external_secret_reference="test/previous",
+        status="Previous",
+        activated_at=NOW - timedelta(seconds=1),
+        previous_verification_until=NOW,
+    )
+    current = client.post("/__tests__/workflow-auth", content=b"payload", headers=signed_headers())
+    previous = client.post(
+        "/__tests__/workflow-auth",
+        content=b"payload",
+        headers=signed_headers(SECRET_PREVIOUS, nonce="nonce-boundary-0123456789"),
+    )
+    assert current.status_code == previous.status_code == 200
+
+
+def test_previous_expired_one_microsecond_is_ignored(app_client) -> None:
+    _, client, engine = app_client
+    identity_id, _ = seed_current(engine)
+    insert_credential(
+        engine,
+        identity_id,
+        credential_version=2,
+        external_secret_reference="test/previous",
+        status="Previous",
+        previous_verification_until=NOW - timedelta(microseconds=1),
+    )
+    response = client.post(
+        "/__tests__/workflow-auth",
+        content=b"payload",
+        headers=signed_headers(SECRET_PREVIOUS),
+    )
+    assert response.status_code == 401
+
+
+def test_multiple_matching_candidate_secrets_fail_closed(app_client) -> None:
+    app, client, engine = app_client
+    identity_id, _ = seed_current(engine)
+    insert_credential(
+        engine,
+        identity_id,
+        credential_version=2,
+        external_secret_reference="test/previous",
+        status="Previous",
+        previous_verification_until=NOW + timedelta(minutes=5),
+    )
+    app.state.machine_secret_resolver = Resolver(
+        {"test/current": SECRET_CURRENT, "test/previous": SECRET_CURRENT}
+    )
+    response = client.post("/__tests__/workflow-auth", content=b"payload", headers=signed_headers())
+    assert response.status_code == 401
+    with engine.connect() as connection:
+        assert (
+            connection.scalar(
+                select(func.count()).select_from(Base.metadata.tables["machine_request_nonces"])
+            )
+            == 0
+        )
+
+
+def test_query_canonicalization_through_http_boundary(app_client) -> None:
+    _, client, engine = app_client
+    seed_current(engine)
+    equivalent = client.post(
+        "/__tests__/workflow-auth?a=1&b=2",
+        content=b"payload",
+        headers=signed_headers(query=b"b=2&a=1", nonce="nonce-query-one-01234567"),
+    )
+    repeated = client.post(
+        "/__tests__/workflow-auth?z=&a=2&a=1",
+        content=b"payload",
+        headers=signed_headers(query=b"a=1&z=&a=2", nonce="nonce-query-two-01234567"),
+    )
+    changed = client.post(
+        "/__tests__/workflow-auth?a=changed&b=2",
+        content=b"payload",
+        headers=signed_headers(query=b"a=1&b=2", nonce="nonce-query-three-012345"),
+    )
+    added = client.post(
+        "/__tests__/workflow-auth?a=1&b=2&c=3",
+        content=b"payload",
+        headers=signed_headers(query=b"a=1&b=2", nonce="nonce-query-four-0123456"),
+    )
+    assert equivalent.status_code == repeated.status_code == 200
+    assert changed.status_code == added.status_code == 401
+
+
+@pytest.mark.parametrize("query", ["bad=%GG", "bad=%FF"])
+def test_malformed_query_through_http_boundary_is_generic_401(app_client, query) -> None:
+    _, client, engine = app_client
+    seed_current(engine)
+    response = client.post(
+        f"/__tests__/workflow-auth?{query}",
+        content=b"payload",
+        headers=signed_headers(nonce=f"nonce-malformed-{query[-2:]}-012345"),
+    )
+    assert response.status_code == 401
+    with engine.connect() as connection:
+        assert (
+            connection.scalar(
+                select(func.count()).select_from(Base.metadata.tables["machine_request_nonces"])
+            )
+            == 0
+        )
+
+
 def test_secret_and_database_failures_are_safe_503(app_client) -> None:
     app, client, engine = app_client
     seed_current(engine)
@@ -493,6 +796,44 @@ def test_nonce_remains_consumed_after_downstream_failure(app_client) -> None:
             )
             == 1
         )
+
+
+def test_nonce_insertion_database_failure_is_safe_503(app_client) -> None:
+    app, client, engine = app_client
+    seed_current(engine)
+    original = app.state.session_factory
+
+    class NonceFailingFactory:
+        def __call__(self):
+            return original()
+
+        def begin(self):
+            raise OperationalError("hidden nonce insert", {}, Exception("hidden detail"))
+
+    app.state.session_factory = NonceFailingFactory()
+    nonce = "nonce-insert-failure-012345"
+    headers = signed_headers(nonce=nonce)
+    response = client.post("/__tests__/workflow-auth", content=b"payload", headers=headers)
+    app.state.session_factory = original
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "DEPENDENCY_UNAVAILABLE"
+    with engine.connect() as connection:
+        assert (
+            connection.scalar(
+                select(func.count()).select_from(Base.metadata.tables["machine_request_nonces"])
+            )
+            == 0
+        )
+    for forbidden in (
+        "hidden",
+        "workflow.test",
+        "test/current",
+        nonce,
+        headers["X-Service-Signature"],
+        "machine_request_nonces",
+        "Traceback",
+    ):
+        assert forbidden not in response.text
 
 
 def test_human_401_still_advertises_bearer(app_client) -> None:

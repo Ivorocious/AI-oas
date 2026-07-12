@@ -101,7 +101,7 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Known limitations
 
-- The backend includes atomic intake, human authentication, protected request detail, and twelve-table persistence including AI-only execution evidence. No AI runtime, triage, machine authentication, n8n, publisher, proposals/approvals, outbound integration, frontend, or deployment exists.
+- The backend includes atomic intake, human authentication, protected request detail, fifteen-table persistence, and reusable WorkflowService HMAC/nonce authentication. No production WorkflowService business command, command idempotency, AI runtime, callback route, provider integration, n8n workflow, publisher, frontend, or deployment exists.
 - No callback plaintext, provider request/response body, or real AI credential is created or stored.
 - The demonstration policies define triage thresholds, failure taxonomy, retry budgets and delays, stale assessment, and uncertain-outcome reconciliation, but none is implemented. Real-world calibration remains deferred.
 - No real email is sent; only a proposed mock adapter is approved for the MVP.

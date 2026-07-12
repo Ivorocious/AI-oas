@@ -281,4 +281,4 @@ Canonical audit and telemetry never store bearer tokens, passwords, HMAC secrets
 
 ## Deferred implementation decisions
 
-The human JWT library, actor/role migration, protected dependency, and local setup are implemented. Hosted Supabase project settings, demo provisioning, role-management APIs, nonce/callback/machine authentication, secret management, and remaining protected boundaries remain deferred and cannot weaken this model.
+Human authentication plus reusable WorkflowService HMAC verification and nonce persistence are implemented. Hosted secret-manager integration, machine credential rotation, callback-credential plaintext issuance/authentication, non-intake command idempotency, AI commands/callbacks, EventPublisher execution, demo provisioning, and remaining protected boundaries remain deferred.

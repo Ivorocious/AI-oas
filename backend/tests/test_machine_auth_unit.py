@@ -1,12 +1,15 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from ai_operations_automation.app import create_app
 from ai_operations_automation.config import Settings
 from ai_operations_automation.intake.errors import IntakeError
 from ai_operations_automation.machine_auth.authenticator import (
+    WorkflowServiceAuthenticator,
     calculate_signature,
     signatures_match,
     validate_nonce,
@@ -18,6 +21,7 @@ from ai_operations_automation.machine_auth.canonicalization import (
     canonical_path_and_query,
     canonical_query,
     canonical_signing_bytes,
+    extract_request_target,
 )
 
 
@@ -44,6 +48,72 @@ def test_path_and_query_canonicalization_vectors() -> None:
     assert canonical_path(b"/a%2Fb") != canonical_path(b"/a/b")
     assert canonical_query(b"z=&a=2&a=1&space=hello+world") == ("a=1&a=2&space=hello%20world&z=")
     assert canonical_path_and_query(b"/path", b"b=&a=x") == "/path?a=x&b="
+
+
+@pytest.mark.parametrize(
+    "scope",
+    [
+        {},
+        {"raw_path": "/text"},
+        {"raw_path": b""},
+        {"raw_path": b"relative"},
+        {"raw_path": b"/nonascii-\xff"},
+        {"raw_path": b"/raw space"},
+        {"raw_path": b"/control\x01"},
+        {"raw_path": b"/question?"},
+        {"raw_path": b"/fragment#"},
+        {"raw_path": b"/bad%2"},
+        {"raw_path": b"/ok", "query_string": "not-bytes"},
+    ],
+)
+def test_unsafe_asgi_request_targets_fail_before_database_or_secret_work(scope) -> None:
+    calls = {"database": 0, "secret": 0}
+
+    class SessionFactory:
+        def __call__(self):
+            calls["database"] += 1
+            raise AssertionError("database must not be reached")
+
+    class Resolver:
+        def resolve(self, _reference):
+            calls["secret"] += 1
+            raise AssertionError("secret must not be reached")
+
+    now = datetime(2026, 7, 13, 12, 0, tzinfo=UTC)
+    complete_scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/ignored-decoded-path",
+        "query_string": b"",
+        "headers": [
+            (b"x-service-id", b"workflow.test"),
+            (b"x-service-timestamp", str(int(now.timestamp())).encode()),
+            (b"x-service-nonce", b"nonce-0123456789abcdef"),
+            (b"x-service-signature", b"a" * 64),
+        ],
+        **scope,
+    }
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    request = Request(complete_scope, receive)
+    authenticator = WorkflowServiceAuthenticator(
+        Settings(app_environment="test", _env_file=None),
+        SessionFactory(),
+        Resolver(),
+        lambda: now,
+    )
+    with pytest.raises(IntakeError) as captured:
+        asyncio.run(authenticator.authenticate(request))
+    assert captured.value.status_code == 401
+    assert calls == {"database": 0, "secret": 0}
+
+
+def test_extract_request_target_requires_exact_raw_bytes() -> None:
+    assert extract_request_target(
+        {"raw_path": b"/encoded%2fslash", "query_string": b"b=2&a=1"}
+    ) == (b"/encoded%2fslash", b"b=2&a=1")
 
 
 @pytest.mark.parametrize("value", [b"/bad%2", b"/bad%GG"])
