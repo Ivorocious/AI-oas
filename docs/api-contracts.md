@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the approved HTTP contracts for the MVP. Public intake and the protected request-detail query are implemented, and AI execution persistence now exists. The start-AI command, callbacks, attempt/interpretation queries, remaining commands/queries, machine authentication, and n8n workflows are unimplemented.
+This document defines the approved HTTP contracts for the MVP. Public intake and protected request detail are implemented. WorkflowService HMAC transport is reusable infrastructure, but no command or callback route uses it and command-idempotency records remain unimplemented.
 
 The proposed prefix is `/api/v1`. Commands may change canonical state; queries are read-only. FastAPI is the only authoritative command boundary. The frontend and n8n call these contracts and never write canonical database state directly.
 

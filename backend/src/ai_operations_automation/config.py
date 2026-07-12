@@ -30,6 +30,8 @@ class Settings(BaseSettings):
         "https://example.supabase.co/auth/v1/.well-known/jwks.json"
     )
     jwks_cache_seconds: int = Field(default=300, ge=30, le=3600)
+    machine_clock_skew_seconds: int = Field(default=300, ge=30, le=900)
+    machine_nonce_retention_seconds: int = Field(default=600, ge=60, le=3600)
 
     @field_validator("app_name")
     @classmethod
@@ -45,6 +47,14 @@ class Settings(BaseSettings):
         """Keep the future domain API prefix predictable without creating its routes."""
         if not value.startswith("/") or value == "/" or value.endswith("/"):
             raise ValueError("api_v1_prefix must start with '/' and must not end with '/'")
+        return value
+
+    @field_validator("machine_nonce_retention_seconds")
+    @classmethod
+    def nonce_retention_exceeds_clock_skew(cls, value: int, info) -> int:
+        skew = info.data.get("machine_clock_skew_seconds", 300)
+        if value <= skew:
+            raise ValueError("machine nonce retention must exceed clock skew")
         return value
 
 

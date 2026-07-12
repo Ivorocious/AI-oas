@@ -6,7 +6,7 @@ The product remains configurable across service companies instead of assuming a 
 
 ## Status
 
-Phase 0 — Product Definition is complete. Phase 1 — Technical Design and Engineering Foundation is complete. Phase 2 — Executable Foundation is underway. FastAPI, atomic public intake, human authentication, the protected request query, and structural persistence for AI logical operations, attempts, hash-only callback credentials, and immutable interpretations are implemented and validated.
+Phase 0 and Phase 1 are complete; Phase 2 is underway. The executable backend now includes intake, human access, AI execution persistence, structural machine identities/external credential metadata, reusable WorkflowService HMAC verification, and database-backed nonce replay protection.
 
 - [Backend setup, startup, and validation](backend/README.md)
 
@@ -30,4 +30,4 @@ Phase 0 — Product Definition is complete. Phase 1 — Technical Design and Eng
 
 ## Implementation honesty
 
-The repository implements intake, protected request reads, and an AI execution persistence foundation only. It has no start-AI command, provider integration, credential issuance, callback endpoint, machine authentication, deterministic triage, n8n, publisher, proposals/approvals, frontend, or deployment.
+No WorkflowService business command, AI start/callback endpoint, machine secret storage, non-intake command idempotency, provider integration, deterministic triage, n8n, publisher, frontend, or deployment exists yet.

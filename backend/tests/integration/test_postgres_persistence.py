@@ -31,6 +31,9 @@ EXPECTED_APPLICATION_TABLES = {
     "integration_attempts",
     "attempt_callback_credentials",
     "ai_interpretations",
+    "machine_identities",
+    "machine_credential_versions",
+    "machine_request_nonces",
     "service_requests",
 }
 
@@ -194,7 +197,7 @@ def test_upgrade_after_downgrade_succeeds(migrated_engine: Engine) -> None:
 
     with migrated_engine.connect() as database_connection:
         revision = database_connection.scalar(text("SELECT version_num FROM alembic_version"))
-    assert revision == "0005_ai_execution_constraint_hardening"
+    assert revision == "0006_workflow_authentication_foundation"
 
 
 def test_duplicate_accepted_reservation_is_rejected(connection: Connection) -> None:

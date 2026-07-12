@@ -76,4 +76,8 @@ The migrations create six accepted-intake/evidence tables, two human-access tabl
 
 These four tables are structural foundations only. No real AI provider is called, no callback plaintext is created or stored, and integration tests use synthetic hashes rather than credentials.
 
-The public intake endpoint and protected request detail remain as documented. No AI start/callback runtime, provider integration, credential issuance, deterministic triage, machine HMAC, n8n workflow, publisher, proposal/approval flow, or frontend exists. `/health` remains database- and JWKS-independent.
+WorkflowService authentication infrastructure uses `X-Service-ID`, `X-Service-Timestamp`, `X-Service-Nonce`, and a lowercase hexadecimal `X-Service-Signature`. It signs `METHOD`, canonical path/query, timestamp, nonce, and the exact-body SHA-256 digest as newline-separated UTF-8 data. `AI_OPS_MACHINE_CLOCK_SKEW_SECONDS` and `AI_OPS_MACHINE_NONCE_RETENTION_SECONDS` control bounded replay windows.
+
+Machine secrets are resolved through an injected external resolver from stored nonsecret references. No real secret belongs in `.env` or Git; integration tests use synthetic in-memory bytes. No production WorkflowService route uses this dependency yet.
+
+The public intake endpoint and protected request detail remain as documented. Machine HMAC and nonce infrastructure exists but is unattached to production routes. No AI start/callback runtime, provider integration, credential rotation, command idempotency, n8n workflow, publisher, or frontend exists. `/health` remains database-, JWKS-, and secret-resolver-independent.

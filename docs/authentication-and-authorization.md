@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the fixed MVP identity, authentication, and authorization model. Human bearer authentication and protected request reads are implemented, and hash-only attempt callback-credential persistence now exists. Credential generation/plaintext issuance, HMAC authentication, nonce validation, replacement commands, callbacks, hosted Supabase provisioning, and remaining protected boundaries are unimplemented.
+This document defines the fixed MVP identity, authentication, and authorization model. Human access is implemented, and reusable WorkflowService HMAC verification, machine identity/external credential metadata, and database nonce replay protection now exist. No production machine command uses the dependency. Credential rotation, callback plaintext issuance/authentication, non-intake command idempotency, AI start/retry, attempt start, result callbacks, EventPublisher execution, and hosted secret-manager integration remain unimplemented.
 
 The MVP serves one demonstration organization. It uses fixed roles and a centralized permission map rather than editable policies or enterprise RBAC.
 

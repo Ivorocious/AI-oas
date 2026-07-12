@@ -8,6 +8,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 ha
 
 ## Completed work
 
+- Implemented and validated reusable WorkflowService HMAC-SHA256 verification, application-controlled machine identity/external credential metadata, current/previous rotation overlap, and committed nonce replay protection. No production machine route or command was added.
 - Implemented and validated the AI-only execution persistence foundation: immutable logical-operation intent, bounded integration attempts, hash-only callback-credential metadata, immutable interpretations, and the nullable service-request current-interpretation reference. No runtime AI command or callback was added.
 - Implemented asymmetric Supabase-compatible human bearer-token verification with lazy bounded JWKS caching, per-request active actor/current-role resolution, and centralized fixed-role authorization. Added Alembic revision `0003_human_access_foundation` for two human-access tables, bringing the application inventory to eight tables.
 - Implemented and validated protected read-only `GET /api/v1/service-requests/{request_id}` for all three approved human roles. It resolves the public-intake `Location` to a closed request/contact projection without writes; the UUID alone grants no access.
@@ -37,7 +38,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 ha
 
 ## Active task
 
-None. The AI execution persistence foundation is complete.
+None. The WorkflowService authentication and nonce foundation is complete.
 
 ## Blockers
 
@@ -109,6 +110,6 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Next milestone
 
-**Phase 2 — WorkflowService authentication and command-idempotency foundation.**
+**Phase 2 — Non-intake command-idempotency foundation.**
 
-Implement machine identities, HMAC credential metadata, nonce replay protection, and non-intake command idempotency required before exposing AI start or callback commands.
+Implement scoped reservation, canonical body binding, safe replay results, conflict handling, and secret-delivery receipt metadata required before the first AI start command.

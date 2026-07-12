@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the approved Phase 1 persistence design. Twelve representations are now structural SQLAlchemy/Alembic implementations: the prior eight plus AI-only `logical_operations`, `integration_attempts`, `attempt_callback_credentials`, and `ai_interpretations`. The remaining 15 representations and outbound extensions are unimplemented. Cross-row success, request ownership, copied-configuration equality, and terminal-callback guards remain future FastAPI transaction responsibilities.
+This document defines the approved Phase 1 persistence design. Fifteen of 27 representations are structurally implemented, adding `machine_identities`, `machine_credential_versions`, and `machine_request_nonces` to the prior twelve. Twelve representations remain unimplemented. Credential values remain external; nonce insertion after verified signatures is executable, while cleanup/retention jobs and command idempotency remain unimplemented.
 
 The names below are proposed relational names, not finalized SQL identifiers. Exact data types, lengths, encryption facilities, partitioning, and physical storage parameters remain migration-design decisions.
 

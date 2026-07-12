@@ -17,6 +17,11 @@ from ai_operations_automation.db.models.intake import (
     InboundDelivery,
     ServiceRequest,
 )
+from ai_operations_automation.db.models.machine import (
+    MachineCredentialVersion,
+    MachineIdentity,
+    MachineRequestNonce,
+)
 
 __all__ = [
     "AcceptedIntakeKey",
@@ -29,6 +34,9 @@ __all__ = [
     "InboundDelivery",
     "IntegrationAttempt",
     "LogicalOperation",
+    "MachineCredentialVersion",
+    "MachineIdentity",
+    "MachineRequestNonce",
     "OutboxMessage",
     "ServiceRequest",
 ]

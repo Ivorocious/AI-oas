@@ -24,6 +24,9 @@ EXPECTED_TABLES = {
     "integration_attempts",
     "attempt_callback_credentials",
     "ai_interpretations",
+    "machine_identities",
+    "machine_credential_versions",
+    "machine_request_nonces",
 }
 
 NEW_AI_TABLES = {
@@ -51,7 +54,7 @@ def test_engine_and_session_construction_do_not_connect(
     engine.dispose()
 
 
-def test_model_metadata_contains_exactly_twelve_application_tables() -> None:
+def test_model_metadata_contains_exactly_fifteen_application_tables() -> None:
     assert set(Base.metadata.tables) == EXPECTED_TABLES
     assert NEW_AI_TABLES <= set(Base.metadata.tables)
 
@@ -92,6 +95,11 @@ def test_persistence_metadata_has_no_plaintext_or_secret_column_names() -> None:
         "api_key",
         "secret_value",
         "private_key",
+        "hmac_secret",
+        "raw_signature",
+        "raw_nonce",
+        "body_digest",
+        "request_body",
     }
     assert not {
         column.name
