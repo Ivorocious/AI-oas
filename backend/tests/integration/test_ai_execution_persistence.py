@@ -7,7 +7,7 @@ import pytest
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, delete, func, insert, select, text, update
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from ai_operations_automation.app import create_app
 from ai_operations_automation.config import Settings
@@ -179,10 +179,33 @@ def insert_attempt(engine: Engine, operation_id: uuid.UUID, request_id: uuid.UUI
     return values["id"]
 
 
+def insert_succeeded_attempt(
+    engine: Engine, operation_id: uuid.UUID, request_id: uuid.UUID, **overrides
+) -> uuid.UUID:
+    now = datetime.now(UTC)
+    return insert_attempt(
+        engine,
+        operation_id,
+        request_id,
+        state="Succeeded",
+        started_at=now,
+        completed_at=now,
+        result_hash=HASH_C,
+        **overrides,
+    )
+
+
 def assert_rejected(engine: Engine, statement) -> None:
     with pytest.raises(SQLAlchemyError):
         with engine.begin() as connection:
             connection.execute(statement)
+
+
+def assert_constraint(engine: Engine, statement, expected: str) -> None:
+    with pytest.raises(IntegrityError) as captured:
+        with engine.begin() as connection:
+            connection.execute(statement)
+    assert captured.value.orig.diag.constraint_name == expected
 
 
 def test_valid_logical_operation_and_immutable_identity(client, engine) -> None:
@@ -335,6 +358,213 @@ def test_callback_credential_state_hash_and_fk_constraints(client, engine, overr
     )
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("workflow_service_identity", ""),
+        ("workflow_service_identity", "   "),
+        ("workflow_environment", ""),
+        ("workflow_environment", "   "),
+    ],
+)
+def test_callback_scope_must_be_nonblank(client, engine, field, value) -> None:
+    request_id, _ = create_request(client)
+    operation_id = insert_operation(engine, request_id)
+    attempt_id = insert_attempt(engine, operation_id, request_id)
+    assert_rejected(
+        engine,
+        insert(Base.metadata.tables["attempt_callback_credentials"]).values(
+            **credential_values(attempt_id, **{field: value})
+        ),
+    )
+
+
+def test_atomic_callback_credential_replacement(client, engine) -> None:
+    request_id, _ = create_request(client)
+    operation_id = insert_operation(engine, request_id)
+    attempt_id = insert_attempt(engine, operation_id, request_id)
+    credentials = Base.metadata.tables["attempt_callback_credentials"]
+    old_id = uuid.uuid4()
+    new_id = uuid.uuid4()
+    with engine.begin() as connection:
+        connection.execute(insert(credentials).values(**credential_values(attempt_id, id=old_id)))
+    with engine.begin() as connection:
+        connection.execute(
+            update(credentials)
+            .where(credentials.c.id == old_id)
+            .values(
+                state="Replaced",
+                replaced_at=datetime.now(UTC),
+                replacement_credential_id=new_id,
+            )
+        )
+        connection.execute(
+            insert(credentials).values(
+                **credential_values(
+                    attempt_id,
+                    id=new_id,
+                    credential_version=2,
+                    credential_hash="d" * 64,
+                )
+            )
+        )
+    with engine.connect() as connection:
+        rows = (
+            connection.execute(
+                select(credentials).where(credentials.c.integration_attempt_id == attempt_id)
+            )
+            .mappings()
+            .all()
+        )
+    by_id = {row["id"]: row for row in rows}
+    assert by_id[old_id]["state"] == "Replaced"
+    assert by_id[old_id]["replacement_credential_id"] == new_id
+    assert by_id[new_id]["state"] == "Active"
+    assert sum(row["state"] == "Active" for row in rows) == 1
+    assert all("plaintext" not in row for row in rows)
+    assert_constraint(
+        engine,
+        delete(credentials).where(credentials.c.id == new_id),
+        "fk_callback_credential_replacement",
+    )
+
+
+def test_callback_replacement_rolls_back_atomically(client, engine) -> None:
+    request_id, _ = create_request(client)
+    operation_id = insert_operation(engine, request_id)
+    attempt_id = insert_attempt(engine, operation_id, request_id)
+    credentials = Base.metadata.tables["attempt_callback_credentials"]
+    old_id = uuid.uuid4()
+    new_id = uuid.uuid4()
+    with engine.begin() as connection:
+        connection.execute(insert(credentials).values(**credential_values(attempt_id, id=old_id)))
+    with pytest.raises(RuntimeError):
+        with engine.begin() as connection:
+            connection.execute(
+                update(credentials)
+                .where(credentials.c.id == old_id)
+                .values(
+                    state="Replaced",
+                    replaced_at=datetime.now(UTC),
+                    replacement_credential_id=new_id,
+                )
+            )
+            connection.execute(
+                insert(credentials).values(
+                    **credential_values(
+                        attempt_id,
+                        id=new_id,
+                        credential_version=2,
+                        credential_hash="d" * 64,
+                    )
+                )
+            )
+            raise RuntimeError("forced replacement rollback")
+    with engine.connect() as connection:
+        rows = (
+            connection.execute(
+                select(credentials).where(credentials.c.integration_attempt_id == attempt_id)
+            )
+            .mappings()
+            .all()
+        )
+    assert len(rows) == 1
+    assert rows[0]["id"] == old_id
+    assert rows[0]["state"] == "Active"
+    assert rows[0]["replacement_credential_id"] is None
+    assert rows[0]["replaced_at"] is None
+
+
+def test_callback_replacement_self_and_missing_target_are_rejected(client, engine) -> None:
+    request_id, _ = create_request(client)
+    operation_id = insert_operation(engine, request_id)
+    attempt_id = insert_attempt(engine, operation_id, request_id)
+    credentials = Base.metadata.tables["attempt_callback_credentials"]
+    self_id = uuid.uuid4()
+    assert_constraint(
+        engine,
+        insert(credentials).values(
+            **credential_values(
+                attempt_id,
+                id=self_id,
+                state="Replaced",
+                replaced_at=datetime.now(UTC),
+                replacement_credential_id=self_id,
+            )
+        ),
+        "ck_attempt_callback_credentials_replacement_not_self",
+    )
+    assert_constraint(
+        engine,
+        insert(credentials).values(
+            **credential_values(
+                attempt_id,
+                state="Replaced",
+                replaced_at=datetime.now(UTC),
+                replacement_credential_id=uuid.uuid4(),
+            )
+        ),
+        "fk_callback_credential_replacement",
+    )
+
+
+def test_callback_uniqueness_constraints_are_isolated(client, engine) -> None:
+    request_id, _ = create_request(client)
+    operation_id = insert_operation(engine, request_id)
+    attempt_id = insert_attempt(engine, operation_id, request_id)
+    credentials = Base.metadata.tables["attempt_callback_credentials"]
+    old_id = uuid.uuid4()
+    with engine.begin() as connection:
+        connection.execute(insert(credentials).values(**credential_values(attempt_id, id=old_id)))
+        connection.execute(
+            update(credentials)
+            .where(credentials.c.id == old_id)
+            .values(state="Revoked", revoked_at=datetime.now(UTC))
+        )
+    assert_constraint(
+        engine,
+        insert(credentials).values(
+            **credential_values(
+                attempt_id,
+                credential_hash="d" * 64,
+                state="Revoked",
+                revoked_at=datetime.now(UTC),
+            )
+        ),
+        "uq_attempt_callback_credentials_attempt_credential_version",
+    )
+
+    second_operation = insert_operation(engine, request_id, input_hash="e" * 64)
+    second_attempt = insert_attempt(engine, second_operation, request_id)
+    assert_constraint(
+        engine,
+        insert(credentials).values(**credential_values(second_attempt, credential_hash=HASH_C)),
+        "uq_attempt_callback_credentials_credential_hash",
+    )
+
+    with engine.begin() as connection:
+        connection.execute(
+            insert(credentials).values(
+                **credential_values(
+                    attempt_id,
+                    credential_version=2,
+                    credential_hash="e" * 64,
+                )
+            )
+        )
+    assert_constraint(
+        engine,
+        insert(credentials).values(
+            **credential_values(
+                attempt_id,
+                credential_version=3,
+                credential_hash="f" * 64,
+            )
+        ),
+        "uq_attempt_callback_credentials_one_active",
+    )
+
+
 def test_interpretation_uniqueness(client, engine) -> None:
     request_id, _ = create_request(client)
     operation_id = insert_operation(engine, request_id)
@@ -360,6 +590,64 @@ def test_interpretation_uniqueness(client, engine) -> None:
         insert(interpretations).values(
             **interpretation_values(request_id, operation_id, attempt_id)
         ),
+    )
+
+
+def test_interpretation_uniqueness_constraints_are_isolated(client, engine) -> None:
+    request_id, _ = create_request(client)
+    interpretations = Base.metadata.tables["ai_interpretations"]
+
+    operation_1 = insert_operation(engine, request_id)
+    attempt_1 = insert_succeeded_attempt(engine, operation_1, request_id)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(interpretations).values(
+                **interpretation_values(request_id, operation_1, attempt_1)
+            )
+        )
+
+    operation_2 = insert_operation(engine, request_id, input_hash="d" * 64)
+    attempt_2 = insert_succeeded_attempt(engine, operation_2, request_id)
+    assert_constraint(
+        engine,
+        insert(interpretations).values(**interpretation_values(request_id, operation_2, attempt_2)),
+        "uq_ai_interpretations_request_number",
+    )
+
+    failed_attempt = insert_attempt(
+        engine,
+        operation_1,
+        request_id,
+        attempt_number=2,
+        state="TerminalFailure",
+        completed_at=datetime.now(UTC),
+        sanitized_error_code="SYNTHETIC_FAILURE",
+    )
+    assert_constraint(
+        engine,
+        insert(interpretations).values(
+            **interpretation_values(
+                request_id,
+                operation_1,
+                failed_attempt,
+                interpretation_number=2,
+            )
+        ),
+        "uq_ai_interpretations_logical_operation",
+    )
+
+    operation_3 = insert_operation(engine, request_id, input_hash="e" * 64)
+    assert_constraint(
+        engine,
+        insert(interpretations).values(
+            **interpretation_values(
+                request_id,
+                operation_3,
+                attempt_1,
+                interpretation_number=3,
+            )
+        ),
+        "uq_ai_interpretations_producing_attempt",
     )
 
 
@@ -531,16 +819,45 @@ def test_current_reference_projection_is_read_only(client, engine) -> None:
 def test_atomic_failure_rolls_back_complete_ai_graph(client, engine) -> None:
     request_id, _ = create_request(client)
     tables = Base.metadata.tables
+    with engine.connect() as connection:
+        request_before = (
+            connection.execute(
+                select(tables["service_requests"]).where(
+                    tables["service_requests"].c.id == request_id
+                )
+            )
+            .mappings()
+            .one()
+        )
+        evidence_before = (
+            connection.scalar(select(func.count()).select_from(tables["audit_events"])),
+            connection.scalar(select(func.count()).select_from(tables["outbox_messages"])),
+        )
     with pytest.raises(RuntimeError):
         with engine.begin() as connection:
             operation = operation_values(request_id)
             connection.execute(insert(tables["logical_operations"]).values(**operation))
-            attempt = attempt_values(operation["id"], request_id)
+            now = datetime.now(UTC)
+            attempt = attempt_values(
+                operation["id"],
+                request_id,
+                state="Succeeded",
+                started_at=now,
+                completed_at=now,
+                result_hash=HASH_C,
+            )
             connection.execute(insert(tables["integration_attempts"]).values(**attempt))
             connection.execute(
                 insert(tables["attempt_callback_credentials"]).values(
                     **credential_values(attempt["id"])
                 )
+            )
+            interpretation = interpretation_values(request_id, operation["id"], attempt["id"])
+            connection.execute(insert(tables["ai_interpretations"]).values(**interpretation))
+            connection.execute(
+                update(tables["service_requests"])
+                .where(tables["service_requests"].c.id == request_id)
+                .values(current_interpretation_id=interpretation["id"])
             )
             raise RuntimeError("forced rollback")
     with engine.connect() as connection:
@@ -553,28 +870,67 @@ def test_atomic_failure_rolls_back_complete_ai_graph(client, engine) -> None:
                 "ai_interpretations",
             )
         )
+        request_after = (
+            connection.execute(
+                select(tables["service_requests"]).where(
+                    tables["service_requests"].c.id == request_id
+                )
+            )
+            .mappings()
+            .one()
+        )
+        evidence_after = (
+            connection.scalar(select(func.count()).select_from(tables["audit_events"])),
+            connection.scalar(select(func.count()).select_from(tables["outbox_messages"])),
+        )
+    assert request_after == request_before
+    assert request_after["current_interpretation_id"] is None
+    assert evidence_after == evidence_before
 
 
 def test_ai_timestamps_are_timezone_aware(client, engine) -> None:
     request_id, _ = create_request(client)
     operation_id = insert_operation(engine, request_id)
-    attempt_id = insert_attempt(engine, operation_id, request_id)
+    attempt_id = insert_succeeded_attempt(engine, operation_id, request_id)
+    credential_id = uuid.uuid4()
+    interpretation_id = uuid.uuid4()
+    tables = Base.metadata.tables
     with engine.begin() as connection:
         connection.execute(
-            insert(Base.metadata.tables["attempt_callback_credentials"]).values(
-                **credential_values(attempt_id)
+            insert(tables["attempt_callback_credentials"]).values(
+                **credential_values(attempt_id, id=credential_id)
+            )
+        )
+        connection.execute(
+            insert(tables["ai_interpretations"]).values(
+                **interpretation_values(
+                    request_id,
+                    operation_id,
+                    attempt_id,
+                    id=interpretation_id,
+                )
             )
         )
     with engine.connect() as connection:
         timestamps = [
             connection.scalar(
-                select(Base.metadata.tables["logical_operations"].c.created_at).where(
-                    Base.metadata.tables["logical_operations"].c.id == operation_id
+                select(tables["logical_operations"].c.created_at).where(
+                    tables["logical_operations"].c.id == operation_id
                 )
             ),
             connection.scalar(
-                select(Base.metadata.tables["integration_attempts"].c.created_at).where(
-                    Base.metadata.tables["integration_attempts"].c.id == attempt_id
+                select(tables["integration_attempts"].c.created_at).where(
+                    tables["integration_attempts"].c.id == attempt_id
+                )
+            ),
+            connection.scalar(
+                select(tables["attempt_callback_credentials"].c.issued_at).where(
+                    tables["attempt_callback_credentials"].c.id == credential_id
+                )
+            ),
+            connection.scalar(
+                select(tables["ai_interpretations"].c.created_at).where(
+                    tables["ai_interpretations"].c.id == interpretation_id
                 )
             ),
         ]

@@ -373,6 +373,8 @@ Core requests, decision-policy versions, routing decisions, duplicate candidate 
 
 Migrations `0001_intake_persistence` through `0003_human_access_foundation` implement intake and human access. Migration `0004_ai_execution_foundation` implements the AI-only logical-operation, attempt, callback-credential, and interpretation structures. The remaining safe future sequence is:
 
+Migration `0005_ai_execution_constraint_hardening` makes callback workflow scope nonblank and defers the replacement self-FK so one old-to-new hash-only credential transition can commit atomically. Same-attempt identity, exact next-version sequencing, deadline, authority, and plaintext issuance remain future FastAPI command guards; no replacement runtime is implemented.
+
 1. Required extensions, fixed enums, domains, and foundational types.
 2. `application_actors`, role assignments, `machine_identities`, and credential metadata.
 3. Immutable `decision_policy_versions` and `failure_recovery_policy_versions`, intake reservation/delivery, contacts, and service-request aggregates, initially with deferred circular links.

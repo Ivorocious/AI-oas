@@ -201,6 +201,18 @@ class AttemptCallbackCredential(Base):
         CheckConstraint(HASH_CHECK.format(column="credential_hash"), name="credential_hash_valid"),
         CheckConstraint("expires_at > issued_at", name="expiry_valid"),
         CheckConstraint(
+            "char_length(trim(workflow_service_identity)) > 0",
+            name="workflow_service_identity_not_blank",
+        ),
+        CheckConstraint(
+            "char_length(trim(workflow_environment)) > 0",
+            name="workflow_environment_not_blank",
+        ),
+        CheckConstraint(
+            "replacement_credential_id IS NULL OR replacement_credential_id <> id",
+            name="replacement_not_self",
+        ),
+        CheckConstraint(
             "state IN ('Active', 'Consumed', 'Replaced', 'Revoked')", name="state_valid"
         ),
         CheckConstraint(
@@ -249,6 +261,8 @@ class AttemptCallbackCredential(Base):
             "attempt_callback_credentials.id",
             name="fk_callback_credential_replacement",
             ondelete="RESTRICT",
+            deferrable=True,
+            initially="DEFERRED",
         ),
     )
 
