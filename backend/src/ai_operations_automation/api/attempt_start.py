@@ -56,10 +56,11 @@ def _dereferenced_command_schema() -> dict[str, Any]:
         503: {"model": ErrorEnvelope},
     },
     openapi_extra={
+        "security": [{"WorkflowServiceHmac": []}],
         "requestBody": {
             "required": True,
             "content": {"application/json": {"schema": _dereferenced_command_schema()}},
-        }
+        },
     },
 )
 async def start_integration_attempt(

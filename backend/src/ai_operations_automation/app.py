@@ -4,16 +4,21 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session, sessionmaker
 
+from ai_operations_automation.api.attempt_callbacks import router as attempt_callbacks_router
 from ai_operations_automation.api.attempt_start import router as attempt_start_router
+from ai_operations_automation.api.callback_credentials import router as callback_credentials_router
 from ai_operations_automation.api.health import router as health_router
 from ai_operations_automation.api.intake import router as intake_router
+from ai_operations_automation.api.retry_ai import router as retry_ai_router
 from ai_operations_automation.api.service_requests import router as service_requests_router
 from ai_operations_automation.api.start_ai_interpretation import (
     router as start_ai_interpretation_router,
 )
+from ai_operations_automation.api.terminal_failure import router as terminal_failure_router
 from ai_operations_automation.auth.verifier import SupabaseJwtVerifier, url_jwks_loader
 from ai_operations_automation.config import Settings, get_settings
 from ai_operations_automation.db import create_database_engine, create_session_factory
@@ -56,6 +61,34 @@ def create_app(
         callback_credential_generator or generate_callback_credential
     )
 
+    def documented_openapi() -> dict:
+        if application.openapi_schema is not None:
+            return application.openapi_schema
+        schema = get_openapi(
+            title=application.title,
+            version=application.version,
+            routes=application.routes,
+        )
+        security_schemes = schema.setdefault("components", {}).setdefault("securitySchemes", {})
+        security_schemes["WorkflowServiceHmac"] = {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-Service-Signature",
+            "description": (
+                "WorkflowService HMAC proof used with service ID, timestamp, and nonce headers."
+            ),
+        }
+        security_schemes["AttemptCallbackCredential"] = {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-Attempt-Callback-Credential",
+            "description": "Exact attempt-scoped callback authorization credential.",
+        }
+        application.openapi_schema = schema
+        return schema
+
+    application.openapi = documented_openapi
+
     @application.exception_handler(IntakeError)
     async def safe_api_error(_request: Request, error: IntakeError) -> JSONResponse:
         headers = {"X-Correlation-ID": str(uuid.uuid4())}
@@ -69,7 +102,11 @@ def create_app(
 
     application.include_router(health_router)
     application.include_router(attempt_start_router)
+    application.include_router(attempt_callbacks_router)
+    application.include_router(callback_credentials_router)
     application.include_router(intake_router)
+    application.include_router(retry_ai_router)
     application.include_router(service_requests_router)
     application.include_router(start_ai_interpretation_router)
+    application.include_router(terminal_failure_router)
     return application

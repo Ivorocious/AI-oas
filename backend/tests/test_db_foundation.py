@@ -28,6 +28,7 @@ EXPECTED_TABLES = {
     "machine_credential_versions",
     "machine_request_nonces",
     "command_idempotency_records",
+    "failure_recovery_policy_versions",
 }
 
 NEW_AI_TABLES = {
@@ -55,7 +56,7 @@ def test_engine_and_session_construction_do_not_connect(
     engine.dispose()
 
 
-def test_model_metadata_contains_exactly_sixteen_application_tables() -> None:
+def test_model_metadata_contains_exactly_seventeen_application_tables() -> None:
     assert set(Base.metadata.tables) == EXPECTED_TABLES
     assert NEW_AI_TABLES <= set(Base.metadata.tables)
 

@@ -4,10 +4,14 @@
 
 **Phase 2 — Executable Foundation: underway.**
 
-Phase 0 product definition and Phase 1 technical design are complete. Phase 2 has begun with a validated, runnable FastAPI foundation. No domain implementation task is currently active. Remaining detailed decisions continue to be resolved incrementally within focused implementation tasks.
+Phase 0 product definition and Phase 1 technical design are complete. Phase 2 now has a validated runnable foundation, atomic intake, and a complete bounded AI-attempt execution/recovery lifecycle. No implementation task is currently active between checkpoints. Remaining detailed decisions continue to be resolved incrementally within focused implementation tasks.
 
 ## Completed work
 
+- Implemented and validated the three production AI result callbacks. WorkflowService HMAC, committed nonce protection, exact attempt-scoped credential proof, command idempotency, expected attempt version, frozen operation identity, and caller-owned transactions protect success, retryable-failure, and terminal-failure evidence. Success consumes the credential, closes the exact operation, inserts one immutable advisory interpretation, and updates only the request interpretation reference/version. Exact replay works with the consumed credential's durable authorization binding; a new key cannot reuse it.
+- Implemented and validated immutable failure-recovery policy persistence in migration `0009_failure_recovery_foundation`, bringing the application inventory to 17 tables. The seeded deployment-controlled policy has exact identity/digest evidence, all 26 approved stable codes, three-attempt AI/outbound budgets, deterministic delays, stale thresholds, and reconciliation rules. Attempt assessments and request recovery summaries use named constraints and restrictive policy/attempt references.
+- Implemented backend-derived AI retryable, exhaustion, and terminal assessment with PostgreSQL UTC time, safe evidence hashes/references, policy identity, remaining budget, and retry eligibility. The retry-AI command appends the next `Pending` attempt under the same logical operation at exact eligibility, never resets budget, and never gives callback plaintext to a human caller. Manager/administrator terminal disposition requires rationale; OperationsAgent remains denied.
+- Implemented assigned-WorkflowService callback-credential replacement for unexpired `Pending` or `Running` attempts. The command replaces exactly one active version, preserves scope and fixed deadline, records old-credential authorization plus new-secret delivery metadata, creates security audit evidence without a lifecycle outbox event, and returns plaintext once. Trusted non-HTTP BackendService stale assessment handles exact two-minute Pending and five-minute Running AI boundaries and revokes the active callback credential.
 - Implemented and validated migration `0008_callback_command_authorization_binding`, separating the exact callback credential used to authorize a command from one-time callback plaintext delivery metadata. Command completion/replay supports authorization-only, delivery-only, neither, or both independently with restrictive foreign keys, positive-version constraints, Processing-state exclusion, rollback safety, and no response-snapshot inference. No callback route or result processing was added.
 - Implemented and validated reusable attempt-scoped callback authentication: strict single-header extraction, caller-owned explicit-transaction enforcement, exact session/transaction-bound immutable context, locked attempt/operation/request/credential verification, assignment concealment, frozen adapter and ownership guards, PostgreSQL expiry, append-oriented credential history, and constant-time hash proof without a supplied-hash SQL predicate. Test-only HTTP composition confirms HMAC/nonce ordering; no production callback route or mutation was added.
 - Implemented and validated `POST /api/v1/integration-attempts/{attempt_id}/commands/start`: an HMAC-authenticated assigned WorkflowService resolves command idempotency before domain reads, locks the attempt/operation/request/callback context, validates owner input and expiry, moves only `Pending → Running` with PostgreSQL time, and commits one audit/outbox/idempotency result atomically. It returns no credential and invokes no provider.
@@ -43,7 +47,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 ha
 
 ## Active task
 
-None. Callback-command authorization binding is complete.
+None. Batch 1 AI execution lifecycle is complete.
 
 ## Blockers
 
@@ -99,22 +103,22 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 - Exact SQL types/migrations, encryption, canonical hash specifications, database roles, physical indexes, retention durations, archival jobs, backup/restore, and recovery operations
 - Real-world calibration and governance of demonstration policy thresholds and controlled activation
 - Final audit event field schemas, redaction projections, and approved retention durations
-- Concrete n8n workflows, event transport, callback implementation, and event-publisher retry/dead-letter policy
+- Concrete n8n workflows, event transport, and event-publisher retry/dead-letter policy
 - Provider-specific AI and outbound adapter mechanics, timeouts, validation, and contract-test strategy
 - Executable test architecture and scenario fixtures for every invariant and demo path
 - Deployment, environment, observability, and recovery design
 
 ## Known limitations
 
-- The backend includes atomic intake, human authentication, protected request detail, sixteen-table persistence, WorkflowService HMAC/nonce authentication, command idempotency, Start AI Interpretation, claim/start AI attempt, and reusable transaction-bound callback authentication. No production callback route, provider invocation, AI result processing, retry runtime, n8n workflow, publisher, frontend, or deployment exists.
+- The backend includes atomic intake, human authentication, protected request detail, seventeen-table persistence, WorkflowService HMAC/nonce authentication, command idempotency, and the complete bounded AI attempt success/failure/retry/replacement/stale lifecycle. No provider invocation, deterministic triage, duplicate/human review runtime, proposal/approval runtime, outbound execution, n8n workflow, publisher, frontend, or deployment exists.
 - Start AI generates one callback plaintext value in memory and issues it only after commit; only its SHA-256 hash and safe metadata are stored. No provider request/response body or real AI provider credential is created or stored.
-- The demonstration policies define triage thresholds, failure taxonomy, retry budgets and delays, stale assessment, and uncertain-outcome reconciliation, but none is implemented. Real-world calibration remains deferred.
+- The immutable demonstration failure policy, AI assessment/retry delays, and AI stale boundaries are executable. Deterministic triage and outbound reconciliation remain unimplemented. Real-world calibration remains deferred.
 - No real email is sent; only a proposed mock adapter is approved for the MVP.
 - The design targets one demonstration organization, one primary intake path, and modest operational scale.
 - Billing, payments, multi-tenancy, mobile apps, full CRM behavior, autonomous communication, large-scale analytics, numerous real integrations, enterprise authentication, microservices, and Kubernetes remain outside scope.
 
 ## Next milestone
 
-**Phase 2 — AI success callback command.**
+**Phase 2 — Deterministic triage and review lifecycle.**
 
-Use WorkflowService HMAC plus exact callback-credential proof and callback command idempotency with the durable authorization binding to support exact replay after credential consumption. Accept structured allowlisted AI result evidence, mark the attempt and operation succeeded, create an immutable interpretation, update the request's current-interpretation reference/version, and atomically persist credential consumption, audit, outbox, and the safe response.
+Persist and execute the approved immutable decision policy, complete backend-authoritative triage from the current interpretation, create duplicate candidates and immutable routing decisions, and implement explicit duplicate resolution plus bounded human-review recalculation without allowing AI evidence to choose canonical routing.

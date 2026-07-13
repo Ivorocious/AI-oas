@@ -37,7 +37,9 @@ def engine() -> Engine:
 
 @pytest.fixture
 def client(engine: Engine) -> TestClient:
-    tables = ", ".join(f'"{name}"' for name in Base.metadata.tables)
+    tables = ", ".join(
+        f'"{name}"' for name in Base.metadata.tables if name != "failure_recovery_policy_versions"
+    )
     with engine.begin() as connection:
         connection.execute(text(f"TRUNCATE {tables} CASCADE"))
     app = create_app(Settings(_env_file=None), create_session_factory(engine))
@@ -313,7 +315,7 @@ def test_second_migration_is_applied_and_deferrable(engine) -> None:
                 "AND condeferrable AND condeferred"
             )
         )
-    assert revision == "0008_callback_command_authorization_binding"
+    assert revision == "0009_failure_recovery_foundation"
     assert deferred == 2
 
 

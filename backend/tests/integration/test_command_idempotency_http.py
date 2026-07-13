@@ -58,7 +58,9 @@ def engine() -> Engine:
 
 @pytest.fixture
 def command_client(engine: Engine):
-    tables = ", ".join(f'"{name}"' for name in Base.metadata.tables)
+    tables = ", ".join(
+        f'"{name}"' for name in Base.metadata.tables if name != "failure_recovery_policy_versions"
+    )
     identity_id = uuid.uuid4()
     with engine.begin() as connection:
         connection.execute(text(f"TRUNCATE {tables} CASCADE"))
@@ -329,4 +331,10 @@ def test_private_route_is_not_in_production_or_openapi(command_client) -> None:
         "/api/v1/service-requests/{request_id}",
         "/api/v1/service-requests/{request_id}/commands/start-ai-interpretation",
         "/api/v1/integration-attempts/{attempt_id}/commands/start",
+        "/api/v1/integration-attempts/{attempt_id}/callbacks/succeeded",
+        "/api/v1/integration-attempts/{attempt_id}/callbacks/retryable-failure",
+        "/api/v1/integration-attempts/{attempt_id}/callbacks/terminal-failure",
+        "/api/v1/integration-attempts/{attempt_id}/commands/replace-callback-credential",
+        "/api/v1/service-requests/{request_id}/commands/retry-ai",
+        "/api/v1/service-requests/{request_id}/commands/mark-terminal-failure",
     }

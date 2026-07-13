@@ -115,7 +115,7 @@ AI output is advisory and cannot approve an action, set final priority, select f
 
 ## MVP non-goals
 
-Failure recovery is bounded by the [failure and recovery policy](failure-and-recovery-policy.md): three total attempts per logical operation, deterministic delays, proposal revision without budget reset, and no blind retry of an uncertain outbound outcome. These are design requirements, not implemented capabilities.
+Failure recovery is bounded by the [failure and recovery policy](failure-and-recovery-policy.md): three total attempts per logical operation, deterministic delays, proposal revision without budget reset, and no blind retry of an uncertain outbound outcome. The AI attempt budget, delay, retry, terminal, callback-replacement, and stale-assessment behavior is executable; outbound recovery remains an approved later Phase 2 capability.
 
 - Full CRM replacement
 - Billing and payment processing

@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the approved HTTP contracts for the MVP. Public intake, protected request detail, Start AI Interpretation, and claim/start AI attempt are implemented. Both production WorkflowService commands use HMAC and nonce persistence; their mutations use command idempotency, expected versions, and atomic transactions. Reusable attempt-scoped callback authentication infrastructure exists, but every production callback route remains unimplemented.
+This document defines the approved HTTP contracts for the MVP. Public intake, protected request detail, Start AI Interpretation, claim/start, all three AI result callbacks, AI retry, callback-credential replacement, and manager terminal disposition are implemented. WorkflowService commands use HMAC and nonce persistence; callbacks add exact attempt-credential proof. Mutations use command idempotency, expected versions, and atomic transactions.
 
 The proposed prefix is `/api/v1`. Commands may change canonical state; queries are read-only. FastAPI is the only authoritative command boundary. The frontend and n8n call these contracts and never write canonical database state directly.
 
@@ -181,9 +181,9 @@ Callbacks report evidence for backend-created attempts. They are commands, not d
 
 Callbacks reject fields that attempt to set service-request category, status, priority, queue, routing, approval, proposal state, retry eligibility, or arbitrary aggregate IDs. Credential replacement likewise cannot start/retry an attempt, invoke a provider, or change owner state/scope. An unknown or unauthorized attempt returns `404 ATTEMPT_NOT_FOUND` or `403 CALLBACK_FORBIDDEN`. A different result after terminalization returns `409 INTEGRATION_RESULT_CONFLICT`.
 
-The implemented claim/start request is `{ "schema_version": "1.0", "expected_versions": { "integration_attempt": 1 }, "command": {} }`. Its response contains current correlation, stable command ID, request/operation/attempt IDs, attempt number, `AIInterpretation`, `Running`, database start time, adapter name/version, and resulting attempt version. Reusable HMAC-plus-callback-credential verification exists for later callback commands, but no callback path, callback body, result processing, or retry command is implemented.
+The implemented claim/start request is `{ "schema_version": "1.0", "expected_versions": { "integration_attempt": 1 }, "command": {} }`. Its response contains current correlation, stable command ID, request/operation/attempt IDs, attempt number, `AIInterpretation`, `Running`, database start time, adapter name/version, and resulting attempt version. The AI callback paths use closed evidence bodies and derive success, retryable failure, exhaustion, or terminal failure without invoking a provider. Retry AI appends a new bounded attempt only after PostgreSQL eligibility time.
 
-Command idempotency can structurally retain the exact callback credential used to authorize a future callback command without claiming that callback plaintext was issued. This internal authorization binding is independent of the existing one-time secret-delivery receipt and is not added automatically to response snapshots. Every production callback route remains unimplemented.
+Command idempotency retains the exact callback credential that authorizes a callback command without claiming that callback plaintext was issued. This authorization binding is independent of the one-time secret-delivery receipt and is not added automatically to response snapshots. It permits only exact replay with the same consumed credential, command key, route scope, and canonical body.
 
 ## Query catalog
 

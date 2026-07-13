@@ -6,7 +6,7 @@ The product remains configurable across service companies instead of assuming a 
 
 ## Status
 
-Phase 0 and Phase 1 are complete; Phase 2 is underway. The executable backend now includes intake, human access, AI execution persistence, WorkflowService authentication, command idempotency, two production WorkflowService commands, and reusable attempt-scoped callback authentication. Start AI Interpretation creates one `Pending` AI attempt; claim/start moves that exact assigned attempt to `Running` without invoking a provider. The callback verifier combines WorkflowService HMAC identity with the opaque credential for one exact `Running` attempt inside a caller-owned transaction.
+Phase 0 and Phase 1 are complete; Phase 2 is underway. The executable backend now includes intake, human access, AI execution persistence, WorkflowService authentication, command idempotency, and the bounded AI attempt lifecycle. Start AI Interpretation creates one `Pending` attempt; claim/start moves the exact assignment to `Running`; authenticated callbacks record success or backend-derived failure recovery without invoking a provider. AI retry, callback-credential replacement, manager terminal disposition, and trusted stale-attempt assessment use PostgreSQL time, immutable failure-policy identity, atomic audit/outbox evidence, and at most three attempts.
 
 - [Backend setup, startup, and validation](backend/README.md)
 
@@ -30,4 +30,4 @@ Phase 0 and Phase 1 are complete; Phase 2 is underway. The executable backend no
 
 ## Implementation honesty
 
-No AI provider is invoked and no production callback or interpretation/triage result endpoint exists. The reusable callback authentication primitive does not accept result evidence or mutate state. Machine secret storage, credential replacement, deterministic triage, n8n workflows, publishing, frontend, and deployment remain unimplemented.
+No AI provider is invoked. AI callback evidence is advisory: it cannot set category, priority, queue, routing, or approval. Deterministic triage, duplicate/review behavior, proposals and approval, mock outbound execution, n8n workflows, event publication, frontend, and deployment remain unimplemented.

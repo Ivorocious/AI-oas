@@ -53,6 +53,7 @@ QUEUE_VALUES = (
     "DuplicateReview",
     "FailedRetryRequired",
 )
+RECOVERY_TARGET_VALUES = ("TriagePending", "ActionPendingExecution")
 
 
 def _sql_values(values: tuple[str, ...]) -> str:
@@ -184,8 +185,29 @@ class ServiceRequest(Base):
             f"current_queue IS NULL OR current_queue IN ({_sql_values(QUEUE_VALUES)})",
             name="current_queue_valid",
         ),
+        CheckConstraint(
+            "failure_summary_code IS NULL OR failure_summary_code ~ '^[A-Z][A-Z0-9_]{0,99}$'",
+            name="failure_summary_code_valid",
+        ),
+        CheckConstraint(
+            "(status = 'RetryableFailure' "
+            "AND recovery_target IS NOT NULL "
+            f"AND recovery_target IN ({_sql_values(RECOVERY_TARGET_VALUES)}) "
+            "AND recovery_attempt_id IS NOT NULL AND failure_summary_code IS NOT NULL "
+            "AND current_queue IS NOT NULL "
+            "AND current_queue = 'FailedRetryRequired' AND terminal_at IS NULL) OR "
+            "(status = 'TerminalFailure' AND recovery_target IS NULL "
+            "AND recovery_attempt_id IS NOT NULL AND failure_summary_code IS NOT NULL "
+            "AND current_queue IS NULL AND terminal_at IS NOT NULL "
+            "AND terminal_at >= created_at) OR "
+            "(status NOT IN ('RetryableFailure', 'TerminalFailure') "
+            "AND recovery_target IS NULL AND recovery_attempt_id IS NULL "
+            "AND failure_summary_code IS NULL AND terminal_at IS NULL)",
+            name="recovery_fields_consistent",
+        ),
         Index("ix_service_requests_contact_id_created_at", "contact_id", "created_at"),
         Index("ix_service_requests_status_queue_priority", "status", "current_queue", "priority"),
+        Index("ix_service_requests_recovery_attempt_id", "recovery_attempt_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -219,6 +241,18 @@ class ServiceRequest(Base):
         ),
         index=True,
     )
+    recovery_target: Mapped[str | None] = mapped_column(String(32))
+    recovery_attempt_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "integration_attempts.id",
+            name="fk_service_request_recovery_attempt",
+            ondelete="RESTRICT",
+            use_alter=True,
+        ),
+    )
+    failure_summary_code: Mapped[str | None] = mapped_column(String(100))
+    terminal_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

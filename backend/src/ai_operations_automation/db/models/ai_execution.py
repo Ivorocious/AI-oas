@@ -9,6 +9,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
@@ -32,6 +33,29 @@ NONBLANK_FIELDS = (
     "model_name",
     "adapter_name",
     "adapter_version",
+)
+FAILURE_STAGE_VALUES = (
+    "BeforeDispatch",
+    "Dispatch",
+    "ProviderProcessing",
+    "ResponseValidation",
+    "CallbackDelivery",
+    "Reconciliation",
+    "InternalCommit",
+)
+PROVIDER_INVOCATION_VALUES = ("NotInvoked", "Invoked", "InvocationUnknown", "NotApplicable")
+CUSTOMER_SIDE_EFFECT_VALUES = ("NotApplicable", "KnownNotApplied", "Applied", "Unknown")
+RECOVERY_DISPOSITION_VALUES = (
+    "RetrySameOperation",
+    "ReviseProposal",
+    "ReconcileBeforeRetry",
+    "ReplaySameCommand",
+    "Terminal",
+    "NoDomainChange",
+)
+RECONCILIATION_STATUS_VALUES = (
+    "NotRequired",
+    "Required",
 )
 
 
@@ -99,6 +123,22 @@ class IntegrationAttempt(Base):
             "attempt_number",
             name="uq_integration_attempts_operation_attempt",
         ),
+        ForeignKeyConstraint(
+            (
+                "failure_policy_id",
+                "failure_policy_semantic_version",
+                "failure_policy_revision",
+                "failure_policy_digest",
+            ),
+            (
+                "failure_recovery_policy_versions.id",
+                "failure_recovery_policy_versions.semantic_version",
+                "failure_recovery_policy_versions.revision",
+                "failure_recovery_policy_versions.content_digest",
+            ),
+            name="fk_attempt_failure_recovery_policy_identity",
+            ondelete="RESTRICT",
+        ),
         CheckConstraint("operation_kind = 'AIInterpretation'", name="operation_kind_valid"),
         CheckConstraint("attempt_number BETWEEN 1 AND 3", name="attempt_number_valid"),
         CheckConstraint(
@@ -116,6 +156,85 @@ class IntegrationAttempt(Base):
         CheckConstraint(
             "sanitized_error_code IS NULL OR sanitized_error_code ~ '^[A-Z][A-Z0-9_]{0,99}$'",
             name="error_code_valid",
+        ),
+        CheckConstraint(
+            "failure_policy_digest IS NULL OR failure_policy_digest ~ '^[0-9a-f]{64}$'",
+            name="failure_policy_digest_valid",
+        ),
+        CheckConstraint(
+            "sanitized_evidence_hash IS NULL OR sanitized_evidence_hash ~ '^[0-9a-f]{64}$'",
+            name="sanitized_evidence_hash_valid",
+        ),
+        CheckConstraint(
+            "terminal_reason IS NULL OR terminal_reason ~ '^[A-Z][A-Z0-9_]{0,99}$'",
+            name="terminal_reason_valid",
+        ),
+        CheckConstraint(
+            f"failure_stage IS NULL OR failure_stage IN ({_sql_values(FAILURE_STAGE_VALUES)})",
+            name="failure_stage_valid",
+        ),
+        CheckConstraint(
+            "provider_invocation IS NULL OR provider_invocation IN "
+            f"({_sql_values(PROVIDER_INVOCATION_VALUES)})",
+            name="provider_invocation_valid",
+        ),
+        CheckConstraint(
+            "customer_side_effect IS NULL OR customer_side_effect IN "
+            f"({_sql_values(CUSTOMER_SIDE_EFFECT_VALUES)})",
+            name="customer_side_effect_valid",
+        ),
+        CheckConstraint(
+            "recovery_disposition IS NULL OR recovery_disposition IN "
+            f"({_sql_values(RECOVERY_DISPOSITION_VALUES)})",
+            name="recovery_disposition_valid",
+        ),
+        CheckConstraint(
+            "reconciliation_status IS NULL OR reconciliation_status IN "
+            f"({_sql_values(RECONCILIATION_STATUS_VALUES)})",
+            name="reconciliation_status_valid",
+        ),
+        CheckConstraint(
+            "(failure_policy_id IS NULL AND failure_policy_semantic_version IS NULL "
+            "AND failure_policy_revision IS NULL AND failure_policy_digest IS NULL "
+            "AND failure_stage IS NULL AND provider_invocation IS NULL "
+            "AND customer_side_effect IS NULL AND recovery_disposition IS NULL "
+            "AND maximum_attempts IS NULL AND remaining_attempts IS NULL "
+            "AND next_eligible_at IS NULL AND provider_retry_after_at IS NULL "
+            "AND reconciliation_status IS NULL AND reconciliation_deadline IS NULL "
+            "AND sanitized_evidence_reference IS NULL AND sanitized_evidence_hash IS NULL "
+            "AND terminal_reason IS NULL AND assessed_at IS NULL) OR "
+            "(failure_policy_id IS NOT NULL "
+            "AND failure_policy_semantic_version IS NOT NULL "
+            "AND char_length(trim(failure_policy_semantic_version)) > 0 "
+            "AND failure_policy_revision IS NOT NULL AND failure_policy_revision > 0 "
+            "AND failure_policy_digest IS NOT NULL "
+            "AND failure_stage IS NOT NULL AND provider_invocation IS NOT NULL "
+            "AND customer_side_effect IS NOT NULL AND recovery_disposition IS NOT NULL "
+            "AND maximum_attempts IS NOT NULL "
+            "AND maximum_attempts BETWEEN attempt_number AND 3 "
+            "AND remaining_attempts IS NOT NULL "
+            "AND remaining_attempts = maximum_attempts - attempt_number "
+            "AND reconciliation_status IS NOT NULL "
+            "AND sanitized_evidence_hash IS NOT NULL AND assessed_at IS NOT NULL "
+            "AND assessed_at >= created_at)",
+            name="recovery_assessment_complete",
+        ),
+        CheckConstraint(
+            "failure_policy_id IS NULL OR (operation_kind = 'AIInterpretation' "
+            "AND customer_side_effect = 'NotApplicable' "
+            "AND reconciliation_status = 'NotRequired' AND reconciliation_deadline IS NULL "
+            "AND ((state = 'RetryableFailure' "
+            "AND recovery_disposition = 'RetrySameOperation' "
+            "AND remaining_attempts > 0 AND next_eligible_at IS NOT NULL "
+            "AND next_eligible_at >= assessed_at "
+            "AND (provider_retry_after_at IS NULL "
+            "OR (provider_retry_after_at >= assessed_at "
+            "AND next_eligible_at >= provider_retry_after_at)) "
+            "AND terminal_reason IS NULL) OR "
+            "(state = 'TerminalFailure' AND recovery_disposition = 'Terminal' "
+            "AND next_eligible_at IS NULL AND provider_retry_after_at IS NULL "
+            "AND terminal_reason IS NOT NULL)))",
+            name="ai_recovery_assessment_valid",
         ),
         CheckConstraint(
             "(state = 'Pending' AND started_at IS NULL AND completed_at IS NULL "
@@ -150,6 +269,16 @@ class IntegrationAttempt(Base):
             postgresql_where=text("state = 'Succeeded'"),
         ),
         Index("ix_integration_attempts_request_created", "service_request_id", "created_at"),
+        Index(
+            "ix_integration_attempts_policy_assessed",
+            "failure_policy_id",
+            "assessed_at",
+        ),
+        Index(
+            "ix_integration_attempts_recovery_eligibility",
+            "state",
+            "next_eligible_at",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -185,6 +314,24 @@ class IntegrationAttempt(Base):
     safe_provider_correlation: Mapped[str | None] = mapped_column(String(200))
     result_hash: Mapped[str | None] = mapped_column(String(64))
     sanitized_error_code: Mapped[str | None] = mapped_column(String(100))
+    failure_policy_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    failure_policy_semantic_version: Mapped[str | None] = mapped_column(String(32))
+    failure_policy_revision: Mapped[int | None] = mapped_column(Integer)
+    failure_policy_digest: Mapped[str | None] = mapped_column(String(64))
+    failure_stage: Mapped[str | None] = mapped_column(String(32))
+    provider_invocation: Mapped[str | None] = mapped_column(String(32))
+    customer_side_effect: Mapped[str | None] = mapped_column(String(32))
+    recovery_disposition: Mapped[str | None] = mapped_column(String(32))
+    maximum_attempts: Mapped[int | None] = mapped_column(SmallInteger)
+    remaining_attempts: Mapped[int | None] = mapped_column(SmallInteger)
+    next_eligible_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    provider_retry_after_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reconciliation_status: Mapped[str | None] = mapped_column(String(32))
+    reconciliation_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sanitized_evidence_reference: Mapped[str | None] = mapped_column(String(200))
+    sanitized_evidence_hash: Mapped[str | None] = mapped_column(String(64))
+    terminal_reason: Mapped[str | None] = mapped_column(String(100))
+    assessed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class AttemptCallbackCredential(Base):

@@ -36,6 +36,7 @@ EXPECTED_APPLICATION_TABLES = {
     "machine_request_nonces",
     "command_idempotency_records",
     "service_requests",
+    "failure_recovery_policy_versions",
 }
 
 
@@ -198,7 +199,7 @@ def test_upgrade_after_downgrade_succeeds(migrated_engine: Engine) -> None:
 
     with migrated_engine.connect() as database_connection:
         revision = database_connection.scalar(text("SELECT version_num FROM alembic_version"))
-    assert revision == "0008_callback_command_authorization_binding"
+    assert revision == "0009_failure_recovery_foundation"
 
 
 def test_duplicate_accepted_reservation_is_rejected(connection: Connection) -> None:

@@ -14,6 +14,7 @@ from ai_operations_automation.auth.models import AuthenticatedHuman, HumanRole
 from ai_operations_automation.auth.permissions import (
     SERVICE_REQUEST_READERS,
     require_service_request_permission,
+    require_terminal_disposition_permission,
 )
 from ai_operations_automation.auth.verifier import AuthenticationFailure, KeyDiscoveryFailure
 from ai_operations_automation.db.dependencies import get_session_factory
@@ -22,21 +23,25 @@ from ai_operations_automation.db.models.identity import (
     ApplicationActorRoleAssignment,
 )
 from ai_operations_automation.intake.errors import IntakeError
+from ai_operations_automation.machine_auth.authenticator import WorkflowServiceAuthenticator
+from ai_operations_automation.machine_auth.models import AuthenticatedWorkflowService
 
 bearer = HTTPBearer(auto_error=False)
 
+MACHINE_AUTH_HEADERS = (
+    "x-service-id",
+    "x-service-timestamp",
+    "x-service-nonce",
+    "x-service-signature",
+)
 
-def authenticated_human(
-    request: Request,
-    _correlation_id: Annotated[uuid.UUID, Depends(resolve_request_correlation)],
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
-) -> AuthenticatedHuman:
-    if len(request.headers.getlist("authorization")) != 1:
-        raise IntakeError(401, "AUTHENTICATION_REQUIRED", "Human authentication is required.")
-    if credentials is None or credentials.scheme.lower() != "bearer" or not credentials.credentials:
-        raise IntakeError(401, "AUTHENTICATION_REQUIRED", "Human authentication is required.")
+CommandAuthority = AuthenticatedHuman | AuthenticatedWorkflowService
+
+
+def _resolve_application_human(request: Request, token: str) -> AuthenticatedHuman:
+    """Verify one token and load the one current application role."""
     try:
-        subject = request.app.state.jwt_verifier.verify(credentials.credentials)
+        subject = request.app.state.jwt_verifier.verify(token)
     except KeyDiscoveryFailure as exc:
         raise IntakeError(
             503, "DEPENDENCY_UNAVAILABLE", "A required dependency is unavailable.", True
@@ -81,7 +86,52 @@ def authenticated_human(
     return AuthenticatedHuman(actor.id, subject, cast(HumanRole, assignment.role))
 
 
+def authenticated_human(
+    request: Request,
+    _correlation_id: Annotated[uuid.UUID, Depends(resolve_request_correlation)],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+) -> AuthenticatedHuman:
+    if len(request.headers.getlist("authorization")) != 1:
+        raise IntakeError(401, "AUTHENTICATION_REQUIRED", "Human authentication is required.")
+    if credentials is None or credentials.scheme.lower() != "bearer" or not credentials.credentials:
+        raise IntakeError(401, "AUTHENTICATION_REQUIRED", "Human authentication is required.")
+    return _resolve_application_human(request, credentials.credentials)
+
+
+async def authenticated_retry_authority(
+    request: Request,
+    _correlation_id: Annotated[uuid.UUID, Depends(resolve_request_correlation)],
+) -> CommandAuthority:
+    """Resolve exactly one human or WorkflowService credential family."""
+    authorization_values = request.headers.getlist("authorization")
+    has_human = bool(authorization_values)
+    has_machine = any(request.headers.getlist(name) for name in MACHINE_AUTH_HEADERS)
+    if has_human == has_machine:
+        raise IntakeError(401, "AUTHENTICATION_REQUIRED", "Authentication is required.")
+    if has_human:
+        if len(authorization_values) != 1:
+            raise IntakeError(401, "AUTHENTICATION_REQUIRED", "Human authentication is required.")
+        scheme, separator, token = authorization_values[0].partition(" ")
+        if separator != " " or scheme.lower() != "bearer" or not token or token != token.strip():
+            raise IntakeError(401, "AUTHENTICATION_REQUIRED", "Human authentication is required.")
+        return _resolve_application_human(request, token)
+
+    authenticator = WorkflowServiceAuthenticator(
+        settings=request.app.state.settings,
+        session_factory=request.app.state.session_factory,
+        secret_resolver=request.app.state.machine_secret_resolver,
+        clock=request.app.state.machine_clock,
+    )
+    return await authenticator.authenticate(request)
+
+
 def require_service_request_reader(
     human: Annotated[AuthenticatedHuman, Depends(authenticated_human)],
 ) -> AuthenticatedHuman:
     return require_service_request_permission(human)
+
+
+def require_terminal_disposition_actor(
+    human: Annotated[AuthenticatedHuman, Depends(authenticated_human)],
+) -> AuthenticatedHuman:
+    return require_terminal_disposition_permission(human)

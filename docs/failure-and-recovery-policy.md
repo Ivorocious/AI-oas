@@ -2,13 +2,13 @@
 
 ## Status and scope
 
-This Phase 1 design defines deterministic failure classification, retry eligibility, bounded recovery, stale-attempt assessment, and uncertain outbound reconciliation. A bounded base AI attempt structure is implemented. Failure-policy versions, assessment, retry calculations, stale assessment, reconciliation, and recovery commands remain unimplemented.
+This approved Phase 1 design defines deterministic failure classification, retry eligibility, bounded recovery, stale-attempt assessment, and uncertain outbound reconciliation. Phase 2 now implements the immutable policy version, the complete AI success/failure/retry lifecycle, exact retry calculations, callback-credential replacement, manager terminal disposition, and trusted Pending/Running AI stale assessment.
 
-No runtime failure/recovery workflow, adapter, worker, or publisher behavior is implemented.
+Outbound failure/recovery and uncertain-result reconciliation remain unimplemented. No provider adapter, worker, n8n workflow, or event publisher is invoked by the backend.
 
 ## Immutable `FailureRecoveryPolicyVersion`
 
-`FailureRecoveryPolicyVersion` is an immutable deployment-controlled policy represented by proposed relation `failure_recovery_policy_versions`. It contains: policy UUID; stable policy key; semantic version; monotonic revision; content digest; effective UTC timestamp; `Draft`, `Active`, or `Retired` status; operation-kind rules; failure-code catalog; retry budgets; retry-delay schedule; stale-attempt thresholds; reconciliation rules and deadline; recovery-disposition rules; terminalization rules; and created timestamp.
+`FailureRecoveryPolicyVersion` is an immutable deployment-controlled policy represented by relation `failure_recovery_policy_versions`. It contains: policy UUID; stable policy key; semantic version; monotonic revision; content digest; effective UTC timestamp; `Draft`, `Active`, or `Retired` status; operation-kind rules; failure-code catalog; retry budgets; retry-delay schedule; stale-attempt thresholds; reconciliation rules and deadline; recovery-disposition rules; terminalization rules; and created timestamp.
 
 There is no policy UI or generic policy API. FastAPI selects the effective policy using database UTC time. Every failed or stale attempt records the exact policy ID, semantic version, revision, and digest used for its assessment. A later version applies only to later assessments or newly created attempts; it never rewrites earlier evidence, disposition, eligibility time, budget result, or terminal result. A command whose expected policy identity is stale fails with `FAILURE_POLICY_VERSION_CONFLICT` and changes nothing.
 
@@ -159,7 +159,7 @@ For a retryable-failure callback, FastAPI validates policy, evidence, certainty,
 
 ## API and permission alignment
 
-No public route is added. The catalog remains 21 command intents over 20 normalized mutation templates and 13 queries. Existing `retry-ai`, `retry-outbound`, success/retryable/terminal callbacks, `mark-terminal-failure`, and attempt queries receive the guards and safe projections in this policy. Stable errors added are `RETRY_NOT_YET_ELIGIBLE`, `RETRY_BUDGET_EXHAUSTED`, `RECONCILIATION_REQUIRED`, `OUTBOUND_OUTCOME_UNRESOLVED`, `RECOVERY_DISPOSITION_CONFLICT`, and `FAILURE_POLICY_VERSION_CONFLICT`. Raw provider errors and unrestricted evidence are never returned.
+No policy-management or stale-assessment public route is added. The catalog remains 21 command intents over 20 normalized mutation templates and 13 queries. Existing `retry-ai`, `retry-outbound`, success/retryable/terminal callbacks, `mark-terminal-failure`, and attempt queries receive the guards and safe projections in this policy. Stable errors added are `RETRY_NOT_YET_ELIGIBLE`, `RETRY_BUDGET_EXHAUSTED`, `RECONCILIATION_REQUIRED`, `OUTBOUND_OUTCOME_UNRESOLVED`, `RECOVERY_DISPOSITION_CONFLICT`, and `FAILURE_POLICY_VERSION_CONFLICT`. Raw provider errors and unrestricted evidence are never returned.
 
 ## Audit and integration events
 

@@ -49,7 +49,9 @@ def engine() -> Engine:
 
 @pytest.fixture(autouse=True)
 def clean_database(engine: Engine) -> None:
-    tables = ", ".join(f'"{name}"' for name in Base.metadata.tables)
+    tables = ", ".join(
+        f'"{name}"' for name in Base.metadata.tables if name != "failure_recovery_policy_versions"
+    )
     with engine.begin() as connection:
         connection.execute(text(f"TRUNCATE {tables} CASCADE"))
 
@@ -109,10 +111,10 @@ def assert_rejected(engine: Engine, values: dict) -> str:
 
 def test_migration_inventory_downgrade_and_reupgrade(engine: Engine) -> None:
     assert set(inspect(engine).get_table_names()) == set(Base.metadata.tables) | {"alembic_version"}
-    assert len(Base.metadata.tables) == 16
+    assert len(Base.metadata.tables) == 17
     with engine.connect() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "0008_callback_command_authorization_binding"
+            "0009_failure_recovery_foundation"
         )
     existing = completed_values()
     engine.dispose()

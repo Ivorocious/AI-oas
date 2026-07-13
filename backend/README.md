@@ -1,8 +1,8 @@
 # Backend executable foundation
 
-This directory contains the runnable FastAPI foundation, `GET /health`, PostgreSQL/SQLAlchemy/Alembic persistence, atomic public intake, and a human-authenticated service-request detail query.
+This directory contains the runnable FastAPI foundation, `GET /health`, PostgreSQL/SQLAlchemy/Alembic persistence, atomic public intake, a human-authenticated service-request detail query, and the complete bounded AI-attempt lifecycle.
 
-It also exposes `POST /api/v1/service-requests/{request_id}/commands/start-ai-interpretation` to an HMAC-authenticated `WorkflowService`. The command creates one logical operation, one `Pending` attempt, hash-only callback authorization, safe audit evidence, and one pending outbox row atomically. It does not start the attempt or invoke an AI provider.
+It exposes `POST /api/v1/service-requests/{request_id}/commands/start-ai-interpretation` to an HMAC-authenticated `WorkflowService`. The command creates one logical operation, one `Pending` attempt, hash-only callback authorization, safe audit evidence, and one pending outbox row atomically. Claim/start and result callbacks change canonical state, but FastAPI never invokes an AI provider.
 
 ## First setup
 
@@ -94,7 +94,13 @@ The authenticated stable service ID and environment must exactly match the backe
 
 WorkflowService HMAC authentication is necessary but insufficient for callbacks. The reusable callback verifier additionally requires exactly one `X-Attempt-Callback-Credential` proving authority over the exact assigned `Running` attempt. Only the SHA-256 hash is stored; candidate rows are loaded by attempt ID and compared in constant time without placing the supplied value or digest in SQL predicates.
 
-Verification runs inside an explicit caller-owned SQLAlchemy transaction. It locks and validates the attempt, frozen operation intent, owner request, credential history, assignment/environment, active highest credential version, and PostgreSQL-controlled expiry. The returned immutable safe context remains usable only in that same active session and transaction. No production callback endpoint exists and no result evidence is accepted or persisted.
+Verification runs inside an explicit caller-owned SQLAlchemy transaction. It locks and validates the attempt, frozen operation intent, owner request, credential history, assignment/environment, highest credential version, and PostgreSQL-controlled expiry. The returned immutable safe context remains usable only in that same active session and transaction.
+
+The production `succeeded`, `retryable-failure`, and `terminal-failure` callback routes require WorkflowService HMAC plus the exact attempt credential. Success stores one immutable advisory interpretation while leaving the request `TriagePending`. Failure callbacks accept only allowlisted evidence; the backend derives policy identity, disposition, remaining budget, retry eligibility, request state, audit, and outbox evidence. Exact replay after credential consumption requires the original command key and body plus the consumed credential's durable authorization binding.
+
+`POST /api/v1/integration-attempts/{attempt_id}/commands/replace-callback-credential` replaces only an unexpired `Pending` or `Running` attempt credential. It preserves assignment, environment, scope, and deadline, returns new plaintext once, and creates security audit evidence without a lifecycle outbox event.
+
+`POST /api/v1/service-requests/{request_id}/commands/retry-ai` creates the next bounded attempt under the same logical operation after the database-controlled eligibility time. Human operators receive `ReplacementRequired` rather than callback plaintext; the assigned WorkflowService can then use credential replacement. `POST /api/v1/service-requests/{request_id}/commands/mark-terminal-failure` is limited to current ManagerApprover and Administrator roles. Stale Pending and Running AI assessment is a directly testable trusted in-process service, not a public route.
 
 Public intake remains unauthenticated. `GET /api/v1/service-requests/{request_id}` requires a valid bearer token whose verified Supabase subject maps to an active local application actor with a current allowed role. The intake `Location` UUID alone grants no read access.
 
@@ -108,7 +114,7 @@ uv run alembic upgrade head
 docker compose down
 ```
 
-The migrations create sixteen application tables: six intake/evidence, two human-access, four AI execution/interpretation, three machine-security tables, and `command_idempotency_records`.
+The migrations create seventeen application tables: six intake/evidence, two human-access, four AI execution/interpretation, three machine-security tables, `command_idempotency_records`, and immutable `failure_recovery_policy_versions`.
 
 The execution tables now support the Start AI command. No real AI provider is called and callback plaintext is never stored; integration tests use synthetic in-memory credentials.
 
@@ -118,6 +124,6 @@ Machine secrets are resolved through an injected external resolver from stored n
 
 Reusable non-intake command idempotency accepts exactly one 8–128-character visible-ASCII `Idempotency-Key`. Raw keys are never stored; SHA-256 digests are scoped by trusted actor class/ID, command intent, backend route template, and target type/ID. The complete validated closed command model is canonically bound after validation. Exact completed replay returns the stored safe result without execution, while a changed body returns `409 COMMAND_IDEMPOTENCY_CONFLICT`. Secret-bearing records store only safe callback-credential metadata and `PlaintextIssued`; exact replay projects `AlreadyIssued` in memory and returns no plaintext.
 
-Callback-command authorization metadata is stored independently from secret-delivery metadata. The authorization binding identifies the credential that proved authority for a future callback command; the existing secret-delivery fields identify a credential whose plaintext was issued once. Either or both groups may be present on a completed internal command record without changing the safe response snapshot. No production callback endpoint exists yet.
+Callback-command authorization metadata is stored independently from secret-delivery metadata. The authorization binding identifies the credential that proved authority for a callback command; the secret-delivery fields identify a credential whose plaintext was issued once. Either or both groups may be present on a completed command record without placing plaintext in the safe response snapshot.
 
-The public intake endpoint and protected request detail remain as documented. Start AI leaves its attempt `Pending`; claim/start moves it to `Running`. Attempt-scoped callback verification now exists as a reusable transaction-bound primitive, but no production callback endpoint, provider invocation, interpretation, credential replacement, n8n workflow, publisher, or frontend exists. `/health` remains database-, JWKS-, generator-, secret-resolver-, callback-verifier-, and attempt-command-independent.
+The public intake endpoint and protected request detail remain as documented. Start AI leaves its attempt `Pending`; claim/start moves it to `Running`; callbacks now complete success or backend-derived recovery. No real provider invocation, deterministic triage, proposal/approval lifecycle, outbound execution, n8n workflow, publisher, or frontend exists yet. `/health` remains database-, JWKS-, generator-, secret-resolver-, callback-verifier-, and attempt-command-independent.

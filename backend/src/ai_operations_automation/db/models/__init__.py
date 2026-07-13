@@ -8,6 +8,7 @@ from ai_operations_automation.db.models.ai_execution import (
 )
 from ai_operations_automation.db.models.command_idempotency import CommandIdempotencyRecord
 from ai_operations_automation.db.models.evidence import AuditEvent, OutboxMessage
+from ai_operations_automation.db.models.failure_recovery import FailureRecoveryPolicyVersion
 from ai_operations_automation.db.models.identity import (
     ApplicationActor,
     ApplicationActorRoleAssignment,
@@ -33,6 +34,7 @@ __all__ = [
     "AttemptCallbackCredential",
     "Contact",
     "CommandIdempotencyRecord",
+    "FailureRecoveryPolicyVersion",
     "InboundDelivery",
     "IntegrationAttempt",
     "LogicalOperation",
