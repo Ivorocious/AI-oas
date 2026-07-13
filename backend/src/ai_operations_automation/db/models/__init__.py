@@ -7,6 +7,13 @@ from ai_operations_automation.db.models.ai_execution import (
     LogicalOperation,
 )
 from ai_operations_automation.db.models.command_idempotency import CommandIdempotencyRecord
+from ai_operations_automation.db.models.decision import (
+    DecisionPolicyVersion,
+    DuplicateCandidate,
+    ReviewedFactSet,
+    RoutingDecision,
+    RoutingDecisionDuplicateCandidate,
+)
 from ai_operations_automation.db.models.evidence import AuditEvent, OutboxMessage
 from ai_operations_automation.db.models.failure_recovery import FailureRecoveryPolicyVersion
 from ai_operations_automation.db.models.identity import (
@@ -34,6 +41,8 @@ __all__ = [
     "AttemptCallbackCredential",
     "Contact",
     "CommandIdempotencyRecord",
+    "DecisionPolicyVersion",
+    "DuplicateCandidate",
     "FailureRecoveryPolicyVersion",
     "InboundDelivery",
     "IntegrationAttempt",
@@ -42,5 +51,8 @@ __all__ = [
     "MachineIdentity",
     "MachineRequestNonce",
     "OutboxMessage",
+    "ReviewedFactSet",
+    "RoutingDecision",
+    "RoutingDecisionDuplicateCandidate",
     "ServiceRequest",
 ]

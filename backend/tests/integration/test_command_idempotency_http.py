@@ -59,7 +59,9 @@ def engine() -> Engine:
 @pytest.fixture
 def command_client(engine: Engine):
     tables = ", ".join(
-        f'"{name}"' for name in Base.metadata.tables if name != "failure_recovery_policy_versions"
+        f'"{name}"'
+        for name in Base.metadata.tables
+        if name not in {"failure_recovery_policy_versions", "decision_policy_versions"}
     )
     identity_id = uuid.uuid4()
     with engine.begin() as connection:
@@ -337,4 +339,9 @@ def test_private_route_is_not_in_production_or_openapi(command_client) -> None:
         "/api/v1/integration-attempts/{attempt_id}/commands/replace-callback-credential",
         "/api/v1/service-requests/{request_id}/commands/retry-ai",
         "/api/v1/service-requests/{request_id}/commands/mark-terminal-failure",
+        (
+            "/api/v1/service-requests/{request_id}/duplicate-candidates/"
+            "{candidate_id}/commands/resolve"
+        ),
+        "/api/v1/service-requests/{request_id}/commands/complete-human-review",
     }

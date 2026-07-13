@@ -162,9 +162,19 @@ def test_route_inventory_and_interpretation_reference_is_nullable_uuid() -> None
         "/api/v1/integration-attempts/{attempt_id}/commands/replace-callback-credential",
         "/api/v1/service-requests/{request_id}/commands/retry-ai",
         "/api/v1/service-requests/{request_id}/commands/mark-terminal-failure",
+        (
+            "/api/v1/service-requests/{request_id}/duplicate-candidates/"
+            "{candidate_id}/commands/resolve"
+        ),
+        "/api/v1/service-requests/{request_id}/commands/complete-human-review",
     }
     field = schema["components"]["schemas"]["ActiveReferences"]["properties"][
         "current_interpretation_id"
     ]
     assert {item.get("type") for item in field["anyOf"]} == {"string", "null"}
     assert any(item.get("format") == "uuid" for item in field["anyOf"])
+    routing_field = schema["components"]["schemas"]["ActiveReferences"]["properties"][
+        "current_routing_decision_id"
+    ]
+    assert {item.get("type") for item in routing_field["anyOf"]} == {"string", "null"}
+    assert any(item.get("format") == "uuid" for item in routing_field["anyOf"])

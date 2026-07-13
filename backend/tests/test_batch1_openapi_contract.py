@@ -28,6 +28,8 @@ EXPECTED_ROUTES = {
     "/api/v1/service-requests/{request_id}",
     "/api/v1/service-requests/{request_id}/commands/start-ai-interpretation",
     "/api/v1/integration-attempts/{attempt_id}/commands/start",
+    ("/api/v1/service-requests/{request_id}/duplicate-candidates/{candidate_id}/commands/resolve"),
+    "/api/v1/service-requests/{request_id}/commands/complete-human-review",
     *BATCH_1_ROUTES,
 }
 

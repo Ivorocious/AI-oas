@@ -31,6 +31,30 @@ class OutboxSpec:
     payload: dict[str, Any]
 
 
+def write_outbox_for_audit(
+    session: Session,
+    audit: AuditEvent,
+    outbox_spec: OutboxSpec,
+) -> OutboxMessage:
+    """Append another PII-minimized integration event for an existing audit fact."""
+    outbox = OutboxMessage(
+        id=uuid.uuid4(),
+        event_type=outbox_spec.event_type,
+        schema_version="1.0",
+        aggregate_type=audit.aggregate_type,
+        aggregate_id=audit.aggregate_id,
+        aggregate_version=audit.aggregate_version,
+        audit_event_id=audit.id,
+        correlation_id=audit.correlation_id,
+        causation_id=audit.causation_id,
+        payload=dict(outbox_spec.payload),
+        publication_state="Pending",
+    )
+    session.add(outbox)
+    session.flush()
+    return outbox
+
+
 def write_audit_and_optional_outbox(
     session: Session,
     audit_spec: AuditSpec,
@@ -57,19 +81,5 @@ def write_audit_and_optional_outbox(
     session.flush()
     if outbox_spec is None:
         return audit, None
-    outbox = OutboxMessage(
-        id=uuid.uuid4(),
-        event_type=outbox_spec.event_type,
-        schema_version="1.0",
-        aggregate_type=audit_spec.aggregate_type,
-        aggregate_id=audit_spec.aggregate_id,
-        aggregate_version=audit_spec.aggregate_version,
-        audit_event_id=audit.id,
-        correlation_id=audit_spec.correlation_id,
-        causation_id=audit_spec.causation_id,
-        payload=dict(outbox_spec.payload),
-        publication_state="Pending",
-    )
-    session.add(outbox)
-    session.flush()
+    outbox = write_outbox_for_audit(session, audit, outbox_spec)
     return audit, outbox

@@ -1,6 +1,6 @@
 # Backend executable foundation
 
-This directory contains the runnable FastAPI foundation, `GET /health`, PostgreSQL/SQLAlchemy/Alembic persistence, atomic public intake, a human-authenticated service-request detail query, and the complete bounded AI-attempt lifecycle.
+This directory contains the runnable FastAPI foundation, `GET /health`, PostgreSQL/SQLAlchemy/Alembic persistence, atomic public intake, a human-authenticated service-request detail query, the complete bounded AI-attempt lifecycle, and deterministic triage/review persistence and services.
 
 It exposes `POST /api/v1/service-requests/{request_id}/commands/start-ai-interpretation` to an HMAC-authenticated `WorkflowService`. The command creates one logical operation, one `Pending` attempt, hash-only callback authorization, safe audit evidence, and one pending outbox row atomically. Claim/start and result callbacks change canonical state, but FastAPI never invokes an AI provider.
 
@@ -102,6 +102,19 @@ The production `succeeded`, `retryable-failure`, and `terminal-failure` callback
 
 `POST /api/v1/service-requests/{request_id}/commands/retry-ai` creates the next bounded attempt under the same logical operation after the database-controlled eligibility time. Human operators receive `ReplacementRequired` rather than callback plaintext; the assigned WorkflowService can then use credential replacement. `POST /api/v1/service-requests/{request_id}/commands/mark-terminal-failure` is limited to current ManagerApprover and Administrator roles. Stale Pending and Running AI assessment is a directly testable trusted in-process service, not a public route.
 
+## Deterministic triage and review
+
+Migration `0010_deterministic_triage_foundation` adds immutable decision-policy, duplicate-candidate, reviewed-fact, routing-decision, and routing-decision/candidate-link records. It seeds deployment-controlled policy `general-service-demo@1.0.0` revision `1`; the backend validates that stored identity and canonical content before evaluating it.
+
+`CompleteTriage` is a trusted `BackendService` operation invoked directly in process. It is deliberately not exposed as a public HTTP route. It uses current request, contact, interpretation, duplicate, and PostgreSQL-time evidence to run the complete deterministic policy, then commits immutable candidates/decision evidence, the request summary, audit records, outbox messages, and command-idempotency outcome atomically.
+
+The human-authenticated API exposes these guarded commands:
+
+- `POST /api/v1/service-requests/{request_id}/duplicate-candidates/{candidate_id}/commands/resolve`
+- `POST /api/v1/service-requests/{request_id}/commands/complete-human-review`
+
+Duplicate resolution records `ConfirmedDuplicate` or `NotDuplicate` without merging contacts or requests. Human review accepts only bounded reviewed facts and always recalculates through the same immutable policy; OperationsAgent authority remains limited to non-Urgent review, while Urgent and hard safety/continuity correction requires ManagerApprover or Administrator authority.
+
 Public intake remains unauthenticated. `GET /api/v1/service-requests/{request_id}` requires a valid bearer token whose verified Supabase subject maps to an active local application actor with a current allowed role. The intake `Location` UUID alone grants no read access.
 
 Current-role resolution fails closed unless exactly one effective allowlisted assignment exists. PostgreSQL prevents multiple open-ended assignments, while overlapping finite historical intervals remain a future controlled role-management concern.
@@ -114,7 +127,7 @@ uv run alembic upgrade head
 docker compose down
 ```
 
-The migrations create seventeen application tables: six intake/evidence, two human-access, four AI execution/interpretation, three machine-security tables, `command_idempotency_records`, and immutable `failure_recovery_policy_versions`.
+The migrations create 22 application tables: the previous 17 intake, access, AI execution, machine-security, idempotency, and failure-policy tables plus `decision_policy_versions`, `duplicate_candidates`, `reviewed_fact_sets`, `routing_decisions`, and `routing_decision_duplicate_candidates`.
 
 The execution tables now support the Start AI command. No real AI provider is called and callback plaintext is never stored; integration tests use synthetic in-memory credentials.
 
@@ -126,4 +139,4 @@ Reusable non-intake command idempotency accepts exactly one 8–128-character vi
 
 Callback-command authorization metadata is stored independently from secret-delivery metadata. The authorization binding identifies the credential that proved authority for a callback command; the secret-delivery fields identify a credential whose plaintext was issued once. Either or both groups may be present on a completed command record without placing plaintext in the safe response snapshot.
 
-The public intake endpoint and protected request detail remain as documented. Start AI leaves its attempt `Pending`; claim/start moves it to `Running`; callbacks now complete success or backend-derived recovery. No real provider invocation, deterministic triage, proposal/approval lifecycle, outbound execution, n8n workflow, publisher, or frontend exists yet. `/health` remains database-, JWKS-, generator-, secret-resolver-, callback-verifier-, and attempt-command-independent.
+The public intake endpoint and protected request detail remain as documented. Start AI leaves its attempt `Pending`; claim/start moves it to `Running`; callbacks complete success or backend-derived recovery. Deterministic triage, duplicate resolution, and bounded human-review recalculation are implemented without invoking an AI provider. Proposal/approval, outbound execution, real integrations, n8n workflows, the outbox publisher, and the frontend do not exist yet. `/health` remains database-, JWKS-, policy-, generator-, secret-resolver-, callback-verifier-, and command-independent.

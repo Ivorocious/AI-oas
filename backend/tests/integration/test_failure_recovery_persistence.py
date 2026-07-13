@@ -25,8 +25,9 @@ from alembic import command
 pytestmark = pytest.mark.integration
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 PREVIOUS_HEAD = "0008_callback_command_authorization_binding"
-CURRENT_HEAD = "0009_failure_recovery_foundation"
+CURRENT_HEAD = "0010_deterministic_triage_foundation"
 POLICY_TABLE = "failure_recovery_policy_versions"
+SEEDED_POLICY_TABLES = {POLICY_TABLE, "decision_policy_versions"}
 HASH_A = "a" * 64
 HASH_B = "b" * 64
 HASH_C = "c" * 64
@@ -48,7 +49,11 @@ def engine() -> Iterator[Engine]:
 @pytest.fixture(autouse=True)
 def clean_operational_rows(engine: Engine) -> Iterator[None]:
     existing = set(inspect(engine).get_table_names())
-    names = [name for name in Base.metadata.tables if name in existing and name != POLICY_TABLE]
+    names = [
+        name
+        for name in Base.metadata.tables
+        if name in existing and name not in SEEDED_POLICY_TABLES
+    ]
     if names:
         tables = ", ".join(f'"{name}"' for name in names)
         with engine.begin() as connection:

@@ -51,7 +51,9 @@ def engine() -> Engine:
 @pytest.fixture
 def callback_context(engine: Engine):
     tables = ", ".join(
-        f'"{name}"' for name in Base.metadata.tables if name != "failure_recovery_policy_versions"
+        f'"{name}"'
+        for name in Base.metadata.tables
+        if name not in {"failure_recovery_policy_versions", "decision_policy_versions"}
     )
     with engine.begin() as connection:
         connection.execute(text(f"TRUNCATE {tables} CASCADE"))
@@ -583,4 +585,4 @@ def test_test_only_http_ordering_nonce_and_success(callback_context) -> None:
         )
     production_paths = create_app(Settings(_env_file=None), factory).openapi()["paths"]
     assert not any(path.startswith("/test/") for path in production_paths)
-    assert len(production_paths) == 11
+    assert len(production_paths) == 13

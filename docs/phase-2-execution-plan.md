@@ -46,7 +46,7 @@ Every migration will be explicit, deterministic, reversible, data-preserving, an
 
 - Persist and seed the immutable demonstration decision policy.
 - Implement the complete ordered evaluator from `docs/deterministic-decision-policy.md`.
-- Implement BackendService `CompleteTriage`, human duplicate resolution, and bounded human-review recalculation.
+- Implement trusted in-process BackendService `CompleteTriage` with no public route, plus human-authenticated duplicate resolution and bounded human-review recalculation.
 - Tests cover every threshold/precedence boundary, candidate identity and resolution, role authority, reproducibility, concurrency, rollback, and PII-minimized evidence.
 
 ### Batch 3 — Proposal approval lifecycle
@@ -89,8 +89,8 @@ Schema-bearing batches also downgrade to the preceding head, re-upgrade, downgra
 
 | Batch | Status | Migration | Application tables | Acceptance |
 | --- | --- | --- | ---: | --- |
-| 1 — AI execution lifecycle | Complete, awaiting checkpoint commit | `0009_failure_recovery_foundation` | 17 | 431 offline and 285 PostgreSQL integration tests passed; migration round trips, Alembic drift, Ruff, format, import, health, and OpenAPI checks passed. |
-| 2 — Triage and review | Not started | `0010_deterministic_triage_foundation` proposed | 22 proposed | Pending Batch 1 push. |
+| 1 — AI execution lifecycle | Complete and pushed at `c65ca6f1bbb2b3c0b1c0a3841cdc348a5a7bbea4` | `0009_failure_recovery_foundation` | 17 | 431 offline and 285 PostgreSQL integration tests passed; migration round trips, Alembic drift, Ruff, format, import, health, and OpenAPI checks passed. |
+| 2 — Triage and review | Complete; checkpoint commit pending | `0010_deterministic_triage_foundation` | 22 | 564 offline and 316 PostgreSQL integration tests passed; migration round trips, Alembic drift checks, Ruff, 165-file format check, import, health, 13-route OpenAPI inventory, policy identity, and diff checks passed. |
 | 3 — Proposal and approval | Not started | `0011_proposal_approval_foundation` proposed | 26 proposed | Pending. |
 | 4 — Mock outbound | Not started | Constraint-only revision if required | 26 | Pending. |
 | 5 — Queries and acceptance | Not started | None expected | 26 | Pending. |

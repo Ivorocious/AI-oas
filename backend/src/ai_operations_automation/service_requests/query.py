@@ -39,6 +39,8 @@ def query_service_request(
                 description=request.normalized_request_description,
                 location_context=request.location_context,
                 timing_preference=request.timing_preference,
+                review_required=request.review_required,
+                review_reason_codes=request.review_reason_codes,
                 created_at=request.created_at,
                 updated_at=request.updated_at,
                 version=request.version,
@@ -52,7 +54,8 @@ def query_service_request(
                 version=contact.version,
             ),
             active_references=ActiveReferences(
-                current_interpretation_id=request.current_interpretation_id
+                current_interpretation_id=request.current_interpretation_id,
+                current_routing_decision_id=request.current_routing_decision_id,
             ),
         ),
     )

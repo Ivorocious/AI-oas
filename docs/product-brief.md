@@ -4,7 +4,7 @@
 
 The AI Operations Automation Suite is a portfolio-grade operations platform for a general service business. It coordinates customer service requests from intake through validation, persistence, AI-assisted interpretation, deterministic routing, human approval, workflow automation, and operational follow-up. The product is configurable across service companies and is not tied to one industry.
 
-This brief is the approved product source of truth for the MVP. The corresponding [architecture](architecture.md) and [deterministic triage policy](deterministic-decision-policy.md) are proposed and have not been implemented.
+This brief is the approved product source of truth for the MVP. The corresponding [architecture](architecture.md) remains the approved target design. The [deterministic triage policy](deterministic-decision-policy.md) now has an executable backend evaluator, immutable seeded policy persistence, trusted in-process triage, explicit duplicate resolution, and bounded human-review recalculation. Proposal approval, mock outbound execution, orchestration, and frontend behavior remain unimplemented.
 
 ## Business problem
 

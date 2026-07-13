@@ -37,6 +37,11 @@ EXPECTED_APPLICATION_TABLES = {
     "command_idempotency_records",
     "service_requests",
     "failure_recovery_policy_versions",
+    "decision_policy_versions",
+    "duplicate_candidates",
+    "reviewed_fact_sets",
+    "routing_decisions",
+    "routing_decision_duplicate_candidates",
 }
 
 
@@ -199,7 +204,7 @@ def test_upgrade_after_downgrade_succeeds(migrated_engine: Engine) -> None:
 
     with migrated_engine.connect() as database_connection:
         revision = database_connection.scalar(text("SELECT version_num FROM alembic_version"))
-    assert revision == "0009_failure_recovery_foundation"
+    assert revision == "0010_deterministic_triage_foundation"
 
 
 def test_duplicate_accepted_reservation_is_rejected(connection: Connection) -> None:

@@ -1,14 +1,14 @@
-# Proposed Deterministic Triage and Human-Review Policy
+# Deterministic Triage and Human-Review Policy
 
 ## Status and scope
 
-This is the proposed, versioned decision policy for the Phase 1 MVP. It defines how a successfully interpreted `ServiceRequest` is deterministically classified, prioritized, checked for possible duplicates, routed, and recorded in an immutable `RoutingDecision`. It refines the [domain model](domain-model.md), [state machines](state-machines.md), [API contracts](api-contracts.md), [authentication and authorization](authentication-and-authorization.md), and [persistence design](persistence-design.md).
+This is the approved, versioned decision policy for the Phase 1 MVP and its Phase 2 implementation. It defines how a successfully interpreted `ServiceRequest` is deterministically classified, prioritized, checked for possible duplicates, routed, and recorded in an immutable `RoutingDecision`. It refines the [domain model](domain-model.md), [state machines](state-machines.md), [API contracts](api-contracts.md), [authentication and authorization](authentication-and-authorization.md), and [persistence design](persistence-design.md).
 
-It is documentation only. No policy configuration, persistence model, API, workflow, adapter, test, or application code exists yet. Failure classification, retry limits, backoff, dead-letter thresholds, and uncertain-side-effect reconciliation remain deliberately outside this policy.
+The ordered evaluator, immutable policy persistence, duplicate-candidate evidence, routing decisions, bounded reviewed facts, trusted in-process `CompleteTriage`, and human-authenticated duplicate-resolution and complete-human-review commands are implemented. `CompleteTriage` is intentionally not a public HTTP route. There is no policy-management API or configuration UI. Failure classification, retry limits, backoff, dead-letter thresholds, and uncertain-side-effect reconciliation remain governed separately by the [failure and recovery policy](failure-and-recovery-policy.md).
 
 ## Authority and outcomes
 
-FastAPI is the proposed authoritative evaluator. It selects one immutable active policy version, canonicalizes allowlisted inputs, evaluates the ordered rules below, and atomically creates a `RoutingDecision` with the request's current summary. AI output, frontend input, and n8n requests are evidence or intent; none can directly set a final category, priority, queue, lifecycle state, approval, or duplicate resolution.
+FastAPI is the authoritative evaluator. It selects one immutable active policy version, canonicalizes allowlisted inputs, evaluates the ordered rules below, and atomically creates a `RoutingDecision` with the request's current summary. AI output, frontend input, and n8n requests are evidence or intent; none can directly set a final category, priority, queue, lifecycle state, approval, or duplicate resolution.
 
 For one current request version and one policy version, a completed evaluation produces all of the following together:
 
@@ -49,7 +49,7 @@ The MVP proposes an immutable `decision_policy_versions` support record, seeded 
 | `effective_at` and `status` | UTC effective time and `Draft`, `Active`, or `Retired` status. |
 | immutable content snapshot | Category definitions, confidence threshold, required-information rules, priority criteria, duplicate rules, review triggers, queue mapping, and the reason-code catalog. |
 
-The initial active policy is `general-service-demo` semantic version `1.0.0`, revision `1`. Its example effective timestamp is `2026-07-11T00:00:00Z`; the timestamp is a proposed seed value, not an implementation assertion. Only one policy is selected for a new calculation. A later version does not silently recalculate existing requests: it applies only to a later guarded triage or review calculation and is retained alongside its predecessor.
+The initial active policy is `general-service-demo` semantic version `1.0.0`, revision `1`, effective at `2026-07-11T00:00:00Z`. Migration `0010_deterministic_triage_foundation` seeds this exact immutable snapshot, and the runtime verifies its identity and canonical content before evaluation. Only one policy is selected for a new calculation. A later version does not silently recalculate existing requests: it applies only to a later guarded triage or review calculation and is retained alongside its predecessor.
 
 Every `RoutingDecision` stores the selected policy ID, semantic version, revision, and digest. It also stores a canonical, allowlisted decision-input hash; the evaluation timestamp used for relative timing; interpretation and duplicate evidence identities; results; source; and, when applicable, reviewed-fact actor and rationale references. This makes a historical result explainable even when a new policy becomes active.
 
@@ -328,9 +328,9 @@ All examples use policy `general-service-demo@1.0.0` revision `1` and record pol
 | Low-confidence AI result | Normalized `Inspection` evidence complete; deadline 10 days; no impact; confidence 0.74; no material candidate. | `Inspection`, `Normal`. | `REVIEW_LOW_AI_CONFIDENCE`. | `HumanReview`, `HumanReview`. | Initial decision records confidence 0.74 and threshold 0.75. |
 | Possible duplicate | Explicit `Repair`; all required facts; same normalized email as a request inside lookback; score 70; no other review trigger. | `Repair`, `Normal`. | `REVIEW_POSSIBLE_DUPLICATE`. | `DuplicateReview`, `DuplicateReview`. | Initial decision retains the candidate observation ID, score tier, and `DUPLICATE_EXACT_EMAIL`. |
 
-## Future executable test requirements
+## Executable test requirements
 
-These are future test requirements only; no tests are created by this documentation task.
+The Phase 2 evaluator and PostgreSQL suites exercise the ordered rules, stable identities, migration/schema constraints, atomic services, command guards, and redaction boundaries. The following list remains the required boundary coverage for this policy as the surrounding lifecycle grows:
 
 - Every stable category and category-specific required-information row.
 - Every priority level and every timing boundary: immediately below, equal to, and immediately above 24 hours, 72 hours, and 21 days.
@@ -352,4 +352,4 @@ These are future test requirements only; no tests are created by this documentat
 
 ## Deferred and non-goal boundaries
 
-This policy does not prescribe provider-failure taxonomy or recovery mechanics; those are now separately defined by the [failure and recovery policy](failure-and-recovery-policy.md) without redefining deterministic routing or human-review authority. Outbox publisher dead-letter thresholds, real-email behavior, adapter implementation, UI behavior, SQL, migrations, and configuration management remain outside this policy. The outbound integration remains a proposed mock email adapter that must never be represented as sending real email.
+This policy does not prescribe provider-failure taxonomy or recovery mechanics; those are separately defined by the [failure and recovery policy](failure-and-recovery-policy.md) without redefining deterministic routing or human-review authority. Migration `0010_deterministic_triage_foundation` and its SQLAlchemy models implement only this policy's current persistence boundary. Policy-management UI/API behavior, outbox publication, outbound adapters, and frontend behavior remain outside this policy. The outbound integration remains a proposed mock email adapter that must never be represented as sending real email.

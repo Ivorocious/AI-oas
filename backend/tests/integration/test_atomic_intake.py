@@ -38,7 +38,9 @@ def engine() -> Engine:
 @pytest.fixture
 def client(engine: Engine) -> TestClient:
     tables = ", ".join(
-        f'"{name}"' for name in Base.metadata.tables if name != "failure_recovery_policy_versions"
+        f'"{name}"'
+        for name in Base.metadata.tables
+        if name not in {"failure_recovery_policy_versions", "decision_policy_versions"}
     )
     with engine.begin() as connection:
         connection.execute(text(f"TRUNCATE {tables} CASCADE"))
@@ -315,7 +317,7 @@ def test_second_migration_is_applied_and_deferrable(engine) -> None:
                 "AND condeferrable AND condeferred"
             )
         )
-    assert revision == "0009_failure_recovery_foundation"
+    assert revision == "0010_deterministic_triage_foundation"
     assert deferred == 2
 
 

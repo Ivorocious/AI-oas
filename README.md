@@ -6,7 +6,7 @@ The product remains configurable across service companies instead of assuming a 
 
 ## Status
 
-Phase 0 and Phase 1 are complete; Phase 2 is underway. The executable backend now includes intake, human access, AI execution persistence, WorkflowService authentication, command idempotency, and the bounded AI attempt lifecycle. Start AI Interpretation creates one `Pending` attempt; claim/start moves the exact assignment to `Running`; authenticated callbacks record success or backend-derived failure recovery without invoking a provider. AI retry, callback-credential replacement, manager terminal disposition, and trusted stale-attempt assessment use PostgreSQL time, immutable failure-policy identity, atomic audit/outbox evidence, and at most three attempts.
+Phase 0 and Phase 1 are complete; Phase 2 is underway. The executable backend now includes intake, human access, the bounded AI attempt lifecycle, and deterministic triage/review. Migration `0010_deterministic_triage_foundation` seeds the immutable `general-service-demo@1.0.0` decision policy and brings the schema to 22 application tables. A trusted in-process `CompleteTriage` service—not a public route—derives duplicate candidates, category, priority, review outcome, status, and queue from current evidence. Human-authenticated duplicate resolution and complete-human-review commands preserve expected-version, command-idempotency, role, audit, outbox, and atomic transaction boundaries.
 
 - [Backend setup, startup, and validation](backend/README.md)
 
@@ -18,7 +18,7 @@ Phase 0 and Phase 1 are complete; Phase 2 is underway. The executable backend no
 - [Proposed event and n8n contracts](docs/event-contracts.md)
 - [Proposed authentication and authorization](docs/authentication-and-authorization.md)
 - [Proposed Postgres persistence design](docs/persistence-design.md)
-- [Proposed deterministic triage and review policy](docs/deterministic-decision-policy.md)
+- [Deterministic triage and review policy](docs/deterministic-decision-policy.md)
 - [Proposed failure and recovery policy](docs/failure-and-recovery-policy.md)
 - [ADR 0001: canonical lifecycle state](docs/decisions/0001-canonical-state-and-lifecycle-boundaries.md)
 - [ADR 0002: API and event boundaries](docs/decisions/0002-api-command-and-event-boundaries.md)
@@ -30,4 +30,4 @@ Phase 0 and Phase 1 are complete; Phase 2 is underway. The executable backend no
 
 ## Implementation honesty
 
-No AI provider is invoked. AI callback evidence is advisory: it cannot set category, priority, queue, routing, or approval. Deterministic triage, duplicate/review behavior, proposals and approval, mock outbound execution, n8n workflows, event publication, frontend, and deployment remain unimplemented.
+No AI provider is invoked. AI callback evidence remains advisory: only the deterministic backend evaluator can derive category, priority, queue, routing, and review state. The current implementation has no public complete-triage endpoint; trusted backend code invokes that service in process. Proposal/approval behavior, mock outbound execution, real integrations, n8n workflows, event publication, frontend, and deployment remain unimplemented.

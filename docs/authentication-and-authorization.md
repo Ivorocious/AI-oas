@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the fixed MVP identity, authentication, and authorization model. Human access and WorkflowService HMAC, nonce, command-idempotency, and attempt-scoped callback authentication protect the implemented boundaries. The assigned WorkflowService may start only its exact `Pending` AI attempt; result callbacks require HMAC plus the exact opaque credential inside the callback transaction. Callback replacement and constrained AI retry are implemented, including mixed human-or-machine retry authority that fails closed when credentials are missing or ambiguous. EventPublisher execution, controlled rotation operations, and hosted secret-manager integration remain unimplemented.
+This document defines the fixed MVP identity, authentication, and authorization model. Human access and WorkflowService HMAC, nonce, command-idempotency, and attempt-scoped callback authentication protect the implemented boundaries. The assigned WorkflowService may start only its exact `Pending` AI attempt; result callbacks require HMAC plus the exact opaque credential inside the callback transaction. Callback replacement and constrained AI retry are implemented, including mixed human-or-machine retry authority that fails closed when credentials are missing or ambiguous. Human bearer authentication and current-role authorization now also protect duplicate resolution and complete human review. Trusted in-process BackendService authority executes deterministic `CompleteTriage`; it is not exposed as a reusable credential or public route. Proposal approval, outbound execution, EventPublisher execution, controlled rotation operations, and hosted secret-manager integration remain unimplemented.
 
 The MVP serves one demonstration organization. It uses fixed roles and a centralized permission map rather than editable policies or enterprise RBAC.
 
@@ -176,7 +176,7 @@ Existing retry permissions authorize only a request for recovery; they never byp
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | `POST /api/v1/intake/service-requests` | A | D | D | D | D | D | D |
 | 2 | Start AI — `POST /service-requests/{request_id}/commands/start-ai-interpretation` | D | D | D | D | C-BS | C-WF | D |
-| 3 | Complete triage — `POST /service-requests/{request_id}/commands/complete-triage` | D | D | D | D | C-BS | D | D |
+| 3 | Complete triage — trusted in-process `CompleteTriage` intent; no public route | D | D | D | D | C-BS | D | D |
 | 4 | Resolve duplicate — `POST /service-requests/{request_id}/duplicate-candidates/{candidate_id}/commands/resolve` | D | A | A | A | D | D | D |
 | 5 | Complete human review — `POST /service-requests/{request_id}/commands/complete-human-review` | D | C-NU | A | A | D | D | D |
 | 6 | Retry AI — `POST /service-requests/{request_id}/commands/retry-ai` | D | C-RT | C-RT | C-RT | C-BS | C-WF | D |
@@ -285,4 +285,4 @@ Canonical audit and telemetry never store bearer tokens, passwords, HMAC secrets
 
 ## Deferred implementation decisions
 
-Human authentication and reusable WorkflowService HMAC, nonce, command-idempotency, attempt-scoped callback authentication, and durable callback-command authorization binding are implemented. Start AI Interpretation issues one created-attempt callback credential after commit, and the assigned WorkflowService can claim/start that exact eligible attempt. No callback command consumes the verified authority yet; credential replacement, AI callbacks/retries, hosted secret-manager integration, rotation, EventPublisher execution, demo provisioning, and remaining protected boundaries remain deferred.
+Human authentication, current-role authorization, reusable WorkflowService HMAC, nonce, command idempotency, attempt-scoped callback authentication, durable callback-command authorization binding, credential replacement, AI callbacks/retries, duplicate resolution, and complete human review are implemented. Start AI Interpretation issues one created-attempt callback credential after commit, and the assigned WorkflowService can claim/start that exact eligible attempt. The deterministic evaluator runs only under trusted in-process BackendService authority. Proposal approval, outbound execution, hosted secret-manager integration, controlled rotation operations, EventPublisher execution, demo provisioning, and remaining protected/query boundaries remain deferred.

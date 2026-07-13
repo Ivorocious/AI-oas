@@ -5,9 +5,11 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     SmallInteger,
@@ -165,6 +167,13 @@ class ServiceRequest(Base):
     __tablename__ = "service_requests"
     __table_args__ = (
         UniqueConstraint("originating_delivery_id", name="uq_service_request_origin_delivery"),
+        ForeignKeyConstraint(
+            ("current_routing_decision_id", "id"),
+            ("routing_decisions.id", "routing_decisions.service_request_id"),
+            name="fk_service_request_current_routing_decision_identity",
+            ondelete="RESTRICT",
+            use_alter=True,
+        ),
         CheckConstraint("version > 0", name="version_positive"),
         CheckConstraint(
             "char_length(trim(normalized_request_description)) > 0",
@@ -190,6 +199,16 @@ class ServiceRequest(Base):
             name="failure_summary_code_valid",
         ),
         CheckConstraint(
+            "(current_routing_decision_id IS NULL AND review_required IS NULL "
+            "AND review_reason_codes IS NULL) OR "
+            "(current_routing_decision_id IS NOT NULL AND review_required IS NOT NULL "
+            "AND review_reason_codes IS NOT NULL "
+            "AND jsonb_typeof(review_reason_codes) = 'array' "
+            "AND ((review_required AND jsonb_array_length(review_reason_codes) > 0) "
+            "OR (NOT review_required AND jsonb_array_length(review_reason_codes) = 0)))",
+            name="routing_summary_consistent",
+        ),
+        CheckConstraint(
             "(status = 'RetryableFailure' "
             "AND recovery_target IS NOT NULL "
             f"AND recovery_target IN ({_sql_values(RECOVERY_TARGET_VALUES)}) "
@@ -208,6 +227,7 @@ class ServiceRequest(Base):
         Index("ix_service_requests_contact_id_created_at", "contact_id", "created_at"),
         Index("ix_service_requests_status_queue_priority", "status", "current_queue", "priority"),
         Index("ix_service_requests_recovery_attempt_id", "recovery_attempt_id"),
+        Index("ix_service_requests_current_routing_decision_id", "current_routing_decision_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -241,6 +261,9 @@ class ServiceRequest(Base):
         ),
         index=True,
     )
+    current_routing_decision_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    review_required: Mapped[bool | None] = mapped_column(Boolean)
+    review_reason_codes: Mapped[list[str] | None] = mapped_column(JSONB)
     recovery_target: Mapped[str | None] = mapped_column(String(32))
     recovery_attempt_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

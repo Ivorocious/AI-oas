@@ -17,6 +17,8 @@ class ServiceRequestView(BaseModel):
     description: str
     location_context: str | None
     timing_preference: str | None
+    review_required: bool | None
+    review_reason_codes: list[str] | None
     created_at: datetime
     updated_at: datetime
     version: int
@@ -34,7 +36,7 @@ class ContactView(BaseModel):
 
 class ActiveReferences(BaseModel):
     current_interpretation_id: uuid.UUID | None = None
-    current_routing_decision_id: None = None
+    current_routing_decision_id: uuid.UUID | None = None
     active_proposed_action_id: None = None
 
 

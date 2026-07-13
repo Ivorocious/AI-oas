@@ -11,7 +11,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from ai_operations_automation.api.attempt_callbacks import router as attempt_callbacks_router
 from ai_operations_automation.api.attempt_start import router as attempt_start_router
 from ai_operations_automation.api.callback_credentials import router as callback_credentials_router
+from ai_operations_automation.api.duplicate_resolution import router as duplicate_resolution_router
 from ai_operations_automation.api.health import router as health_router
+from ai_operations_automation.api.human_review import router as human_review_router
 from ai_operations_automation.api.intake import router as intake_router
 from ai_operations_automation.api.retry_ai import router as retry_ai_router
 from ai_operations_automation.api.service_requests import router as service_requests_router
@@ -22,6 +24,8 @@ from ai_operations_automation.api.terminal_failure import router as terminal_fai
 from ai_operations_automation.auth.verifier import SupabaseJwtVerifier, url_jwks_loader
 from ai_operations_automation.config import Settings, get_settings
 from ai_operations_automation.db import create_database_engine, create_session_factory
+from ai_operations_automation.duplicate_resolution.service import ResolveDuplicateService
+from ai_operations_automation.human_review.service import CompleteHumanReviewService
 from ai_operations_automation.intake.errors import IntakeError
 from ai_operations_automation.machine_auth.secrets import (
     MachineSecretResolver,
@@ -37,6 +41,8 @@ def create_app(
     machine_secret_resolver: MachineSecretResolver | None = None,
     machine_clock: object | None = None,
     callback_credential_generator: object | None = None,
+    duplicate_resolution_service: object | None = None,
+    human_review_service: object | None = None,
 ) -> FastAPI:
     """Create an application without network or database side effects."""
     active_settings = settings or get_settings()
@@ -59,6 +65,12 @@ def create_app(
     application.state.machine_clock = machine_clock or (lambda: datetime.now(UTC))
     application.state.callback_credential_generator = (
         callback_credential_generator or generate_callback_credential
+    )
+    application.state.duplicate_resolution_service = (
+        duplicate_resolution_service or ResolveDuplicateService(session_factory)
+    )
+    application.state.human_review_service = human_review_service or CompleteHumanReviewService(
+        session_factory
     )
 
     def documented_openapi() -> dict:
@@ -104,7 +116,9 @@ def create_app(
     application.include_router(attempt_start_router)
     application.include_router(attempt_callbacks_router)
     application.include_router(callback_credentials_router)
+    application.include_router(duplicate_resolution_router)
     application.include_router(intake_router)
+    application.include_router(human_review_router)
     application.include_router(retry_ai_router)
     application.include_router(service_requests_router)
     application.include_router(start_ai_interpretation_router)

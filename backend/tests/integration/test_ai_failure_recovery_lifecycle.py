@@ -39,6 +39,7 @@ CLAIM_PATH = "/api/v1/integration-attempts/{attempt_id}/commands/start"
 SUCCESS_CALLBACK_PATH = "/api/v1/integration-attempts/{attempt_id}/callbacks/succeeded"
 RETRY_AI_PATH = "/api/v1/service-requests/{request_id}/commands/retry-ai"
 POLICY_TABLE = "failure_recovery_policy_versions"
+SEEDED_POLICY_TABLES = {POLICY_TABLE, "decision_policy_versions"}
 
 
 class Resolver:
@@ -90,7 +91,7 @@ def engine() -> Engine:
 @pytest.fixture
 def lifecycle_context(engine: Engine) -> LifecycleContext:
     retained = Base.metadata.tables[POLICY_TABLE]
-    truncated = [name for name in Base.metadata.tables if name != POLICY_TABLE]
+    truncated = [name for name in Base.metadata.tables if name not in SEEDED_POLICY_TABLES]
     quoted = ", ".join(f'"{name}"' for name in truncated)
     with engine.begin() as connection:
         connection.execute(text(f"TRUNCATE {quoted} CASCADE"))

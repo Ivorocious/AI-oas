@@ -2,11 +2,11 @@
 
 ## Current checkpoint
 
-- Current batch: Batch 1 — Complete the AI execution lifecycle.
-- Batch status: implementation and acceptance gate passed; execution resumed for checkpoint staging.
+- Current batch: Batch 2 — Deterministic triage, duplicate handling, and human review.
+- Batch status: implementation and full acceptance gate passed; checkpoint commit/push pending.
 - Branch: `phase-2-completion`.
-- Current commit: `daf4e4d2ef27931a8c428db01b8a8fca848d0764`.
-- Remote tracking: `origin/phase-2-completion` at the same commit.
+- Current commit: `c65ca6f1bbb2b3c0b1c0a3841cdc348a5a7bbea4`.
+- Remote tracking: `origin/phase-2-completion` at the same commit; divergence `0/0`.
 
 ## Verified baseline
 
@@ -23,7 +23,7 @@
 - Ruff: all checks passed.
 - Ruff format: 94 files already formatted.
 
-## Current batch changes
+## Completed Batch 1 checkpoint
 
 - Migrations added: `0009_failure_recovery_foundation` (parent `0008_callback_command_authorization_binding`).
 - Routes added: AI success, retryable-failure, and terminal-failure callbacks; retry AI; callback-credential replacement; manager/administrator terminal disposition.
@@ -40,20 +40,29 @@
 - Ruff: all checks passed; 138 files formatted.
 - Health smoke: `200 {"status":"ok","service":"AI Operations Automation API"}`.
 
+## Completed Batch 2 implementation
+
+- Migration added: `0010_deterministic_triage_foundation` (parent `0009_failure_recovery_foundation`).
+- Tables added: `decision_policy_versions`, `duplicate_candidates`, `reviewed_fact_sets`, `routing_decisions`, and `routing_decision_duplicate_candidates` (application inventory 22).
+- Policy seed: `general-service-demo` `1.0.0` revision 1, effective `2026-07-11T00:00:00Z`, with canonical content digest `45dd2f101bcf2a36842d942fe35a97c6103dfbeac2d4a689e4f1456fce78f41a` over 4,954 canonical bytes.
+- Evaluator added: complete deterministic category, priority, duplicate scoring/retention, review precedence, status/queue, reason-code, and canonical input calculations over closed allowlisted models.
+- Internal command added: trusted non-HTTP BackendService `CompleteTriage`; no public complete-triage route exists.
+- Human commands added: duplicate-candidate resolution and complete-human-review with bearer authentication, current-role authorization, expected versions, command idempotency, PostgreSQL transactions, immutable evidence, and atomic audit/outbox results.
+- Acceptance gate: 564 offline tests and 316 PostgreSQL integration tests passed. Migration `0010 -> 0009 -> 0010` and `0010 -> base -> 0010` round trips, Alembic drift checks, Ruff, 165-file format check, import, health, 13-route OpenAPI inventory, seeded-policy identity, and `git diff --check` passed.
+
 ## Remaining batches
 
-1. Add deterministic triage and review lifecycle.
-2. Add proposal approval lifecycle.
-3. Add mock outbound execution lifecycle.
-4. Complete protected queries and Phase 2 acceptance.
+1. Add proposal approval lifecycle.
+2. Add mock outbound execution lifecycle.
+3. Complete protected queries and Phase 2 acceptance.
 
 ## Known limitations
 
-- Batch 1 implements only AI execution/recovery. Deterministic triage, duplicate/human review, proposal/approval, outbound execution, and expanded queries remain for Batches 2–5.
+- Batch 2 adds deterministic triage/review only. Proposal/approval, outbound execution, and expanded queries remain for Batches 3–5.
 - The outbound portion of the immutable failure policy is seeded for later exact use, but no outbound operation, reconciliation runtime, provider invocation, or real side effect exists.
 - PostgreSQL Compose remains running during the completion run and will be removed after final validation.
 - Runtime handoff note (2026-07-13): an earlier Codex escalation limit paused the run before staging. The project owner explicitly resumed execution; the complete validated Batch 1 worktree remained intact on `phase-2-completion`.
 
 ## Exact next action
 
-Inspect the complete Batch 1 diff, stage only the listed task files, commit exactly `feat: complete AI execution lifecycle`, push `phase-2-completion`, and verify a clean `0/0` checkpoint. Only then begin migration `0010_deterministic_triage_foundation`.
+Stage the reviewed Batch 2 scope, commit exactly `feat: add deterministic triage and review lifecycle`, push the checkpoint, and verify branch divergence `0/0` before starting Batch 3.

@@ -1,6 +1,6 @@
 # ADR 0005: Deterministic Triage and Review Policy
 
-- Status: Accepted design; documentation only
+- Status: Accepted; implemented in Phase 2 Batch 2
 - Date: 2026-07-11
 - Decision makers: Project owner
 - Related: [product brief](../product-brief.md), [domain model](../domain-model.md), [state machines](../state-machines.md), [API contracts](../api-contracts.md), [persistence design](../persistence-design.md), [ADR 0001](0001-canonical-state-and-lifecycle-boundaries.md), [ADR 0004](0004-postgres-persistence-and-transactional-outbox.md)
@@ -13,7 +13,7 @@ The policy must be concrete enough for future boundary tests and demonstrations,
 
 ## Decision
 
-1. FastAPI will be the proposed authoritative evaluator of a single immutable decision-policy version. It selects canonical, allowlisted inputs and atomically writes the request summary, `RoutingDecision`, audit evidence, outbox messages, and command-idempotency result.
+1. FastAPI is the authoritative evaluator of a single immutable decision-policy version. It selects canonical, allowlisted inputs and atomically writes the request summary, `RoutingDecision`, audit evidence, outbox messages, and command-idempotency result.
 2. AI output is advisory. A validated AI summary, suggested category, missing-information list, confidence, or potential safety signal may corroborate evidence or require review; it cannot directly set final category, priority, queue, state, duplicate resolution, or approval.
 3. The six initial stable category wire values are `Consultation`, `Installation`, `Repair`, `RoutineMaintenance`, `Inspection`, and `OtherCustomRequest`. Display labels may be human-friendly, but technical contracts use these stable values.
 4. The MVP will retain an immutable `decision_policy_versions` configuration snapshot containing policy identity, semantic version/revision, digest, effective time/status, category/required-information rules, confidence threshold, priority rules, duplicate rules, review/queue mapping, and reason-code catalog. It is deployment-controlled; no configuration UI or generic policy API is introduced.
@@ -77,4 +77,4 @@ Rejected for the MVP. Silent recalculation would make earlier decisions difficul
 
 ## Implementation status
 
-This ADR records design only. No policy storage, thresholds, endpoint behavior, SQL migration, ORM model, API implementation, workflow, test, provider adapter, or UI has been created. The proposed mock email adapter remains mock-only and must not be represented as real email delivery.
+Migration `0010_deterministic_triage_foundation`, the SQLAlchemy models, immutable demonstration-policy seed, pure ordered evaluator, trusted in-process `CompleteTriage` service, public duplicate-resolution command, and public complete-human-review command implement this decision. `CompleteTriage` has no public route, and the human commands retain authentication, role, expected-version, idempotency, atomic audit/outbox, and immutable-evidence boundaries. Policy-management APIs/UI, proposals and approval, outbound execution, provider adapters, and frontend behavior remain unimplemented. The proposed mock email adapter remains mock-only and must not be represented as real email delivery.

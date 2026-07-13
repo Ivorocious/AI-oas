@@ -422,6 +422,12 @@ class AiInterpretation(Base):
             "interpretation_number",
             name="uq_ai_interpretations_request_number",
         ),
+        UniqueConstraint(
+            "id",
+            "service_request_id",
+            "interpretation_number",
+            name="uq_ai_interpretations_routing_identity",
+        ),
         UniqueConstraint("logical_operation_id", name="uq_ai_interpretations_logical_operation"),
         UniqueConstraint("producing_attempt_id", name="uq_ai_interpretations_producing_attempt"),
         CheckConstraint("interpretation_number > 0", name="interpretation_number_positive"),
