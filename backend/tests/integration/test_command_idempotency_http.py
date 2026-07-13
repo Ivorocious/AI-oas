@@ -327,4 +327,5 @@ def test_private_route_is_not_in_production_or_openapi(command_client) -> None:
         "/health",
         "/api/v1/intake/service-requests",
         "/api/v1/service-requests/{request_id}",
+        "/api/v1/service-requests/{request_id}/commands/start-ai-interpretation",
     }

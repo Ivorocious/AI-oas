@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the fixed MVP identity, authentication, and authorization model. Human access, reusable WorkflowService HMAC verification, machine identity/external credential metadata, database nonce replay protection, and reusable command idempotency now exist. No production machine business command uses them. Credential rotation, callback plaintext issuance/authentication, AI start/retry, attempt start, result callbacks, EventPublisher execution, and hosted secret-manager integration remain unimplemented.
+This document defines the fixed MVP identity, authentication, and authorization model. Human access and the reusable WorkflowService HMAC, nonce, and command-idempotency foundations now protect the implemented Start AI Interpretation command. That command generates and issues callback plaintext once after commit for its created attempt. Callback authentication, credential replacement, retry AI, attempt start, result callbacks, EventPublisher execution, rotation, and hosted secret-manager integration remain unimplemented.
 
 The MVP serves one demonstration organization. It uses fixed roles and a centralized permission map rather than editable policies or enterprise RBAC.
 
@@ -281,4 +281,4 @@ Canonical audit and telemetry never store bearer tokens, passwords, HMAC secrets
 
 ## Deferred implementation decisions
 
-Human authentication, reusable WorkflowService HMAC verification, nonce persistence, and command-idempotency infrastructure are implemented. No machine business command uses command idempotency yet. Hosted secret-manager integration, machine credential rotation, callback-credential plaintext issuance/authentication, AI commands/callbacks, EventPublisher execution, demo provisioning, and remaining protected boundaries remain deferred.
+Human authentication and reusable WorkflowService HMAC, nonce, and command-idempotency infrastructure are implemented. Start AI Interpretation is the first production machine business command and issues one created-attempt callback credential after commit. Callback authentication, credential replacement, attempt start, AI callbacks/retries, hosted secret-manager integration, rotation, EventPublisher execution, demo provisioning, and remaining protected boundaries remain deferred.

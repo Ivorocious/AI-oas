@@ -34,6 +34,26 @@ def test_app_construction_and_health_do_not_fetch_jwks(monkeypatch) -> None:
     assert client.get("/health").status_code == 200
 
 
+def test_unrelated_routes_do_not_generate_callback_credentials() -> None:
+    calls = 0
+
+    def generator():
+        nonlocal calls
+        calls += 1
+        return "A" * 43
+
+    application = create_app(Settings(_env_file=None), callback_credential_generator=generator)
+    client = TestClient(application)
+    assert calls == 0
+    assert client.get("/health").status_code == 200
+    assert client.post("/api/v1/intake/service-requests").status_code == 400
+    assert (
+        client.get("/api/v1/service-requests/00000000-0000-0000-0000-000000000001").status_code
+        == 401
+    )
+    assert calls == 0
+
+
 def test_missing_and_non_bearer_authentication_are_401() -> None:
     client = TestClient(create_app(Settings(_env_file=None)))
     path = "/api/v1/service-requests/00000000-0000-0000-0000-000000000001"
@@ -109,13 +129,32 @@ def test_openapi_documents_protected_query_and_resolves_local_references() -> No
 
     walk(schema)
 
+    command = schema["paths"][
+        "/api/v1/service-requests/{request_id}/commands/start-ai-interpretation"
+    ]["post"]
+    assert command["requestBody"]["content"]["application/json"]["schema"]
+    expected_responses = {
+        "200",
+        "202",
+        "400",
+        "401",
+        "404",
+        "409",
+        "415",
+        "422",
+        "500",
+        "503",
+    }
+    assert expected_responses <= set(command["responses"])
 
-def test_route_inventory_is_unchanged_and_interpretation_reference_is_nullable_uuid() -> None:
+
+def test_route_inventory_and_interpretation_reference_is_nullable_uuid() -> None:
     schema = create_app(Settings(_env_file=None)).openapi()
     assert set(schema["paths"]) == {
         "/health",
         "/api/v1/intake/service-requests",
         "/api/v1/service-requests/{request_id}",
+        "/api/v1/service-requests/{request_id}/commands/start-ai-interpretation",
     }
     field = schema["components"]["schemas"]["ActiveReferences"]["properties"][
         "current_interpretation_id"

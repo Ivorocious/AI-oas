@@ -2,6 +2,8 @@
 
 This directory contains the runnable FastAPI foundation, `GET /health`, PostgreSQL/SQLAlchemy/Alembic persistence, atomic public intake, and a human-authenticated service-request detail query.
 
+It also exposes `POST /api/v1/service-requests/{request_id}/commands/start-ai-interpretation` to an HMAC-authenticated `WorkflowService`. The command creates one logical operation, one `Pending` attempt, hash-only callback authorization, safe audit evidence, and one pending outbox row atomically. It does not start the attempt or invoke an AI provider.
+
 ## First setup
 
 ```powershell
@@ -60,6 +62,20 @@ uv run ruff format --check .
 
 Integration tests require the Compose PostgreSQL service. Foundation tests do not.
 
+## Start AI interpretation
+
+The production command requires `X-Service-ID`, `X-Service-Timestamp`, `X-Service-Nonce`, `X-Service-Signature`, `X-Correlation-ID`, and a visible-ASCII `Idempotency-Key`. The HMAC covers the exact raw JSON body. Its closed body is:
+
+```json
+{
+  "schema_version": "1.0",
+  "expected_versions": { "service_request": 1 },
+  "command": {}
+}
+```
+
+The first committed execution returns `202 Accepted`, a `Pending` attempt, and one opaque callback credential with `credential_delivery: PlaintextIssued`. An exact replay with a fresh HMAC nonce returns `200 OK`, the original safe identifiers, and `credential_delivery: AlreadyIssued` without plaintext. Only the SHA-256 credential hash is stored. Do not place a real machine HMAC key, callback credential, or signature in documentation, `.env`, Git, or logs.
+
 Public intake remains unauthenticated. `GET /api/v1/service-requests/{request_id}` requires a valid bearer token whose verified Supabase subject maps to an active local application actor with a current allowed role. The intake `Location` UUID alone grants no read access.
 
 Current-role resolution fails closed unless exactly one effective allowlisted assignment exists. PostgreSQL prevents multiple open-ended assignments, while overlapping finite historical intervals remain a future controlled role-management concern.
@@ -74,12 +90,12 @@ docker compose down
 
 The migrations create sixteen application tables: six intake/evidence, two human-access, four AI execution/interpretation, three machine-security tables, and `command_idempotency_records`.
 
-These four tables are structural foundations only. No real AI provider is called, no callback plaintext is created or stored, and integration tests use synthetic hashes rather than credentials.
+The execution tables now support the Start AI command. No real AI provider is called and callback plaintext is never stored; integration tests use synthetic in-memory credentials.
 
 WorkflowService authentication infrastructure uses `X-Service-ID`, `X-Service-Timestamp`, `X-Service-Nonce`, and a lowercase hexadecimal `X-Service-Signature`. It signs `METHOD`, canonical path/query, timestamp, nonce, and the exact-body SHA-256 digest as newline-separated UTF-8 data. `AI_OPS_MACHINE_CLOCK_SKEW_SECONDS` and `AI_OPS_MACHINE_NONCE_RETENTION_SECONDS` control bounded replay windows.
 
-Machine secrets are resolved through an injected external resolver from stored nonsecret references. No real secret belongs in `.env` or Git; integration tests use synthetic in-memory bytes. No production WorkflowService route uses this dependency yet.
+Machine secrets are resolved through an injected external resolver from stored nonsecret references. No real secret belongs in `.env` or Git; integration tests use synthetic in-memory bytes. Start AI is the first production route using this dependency.
 
 Reusable non-intake command idempotency accepts exactly one 8–128-character visible-ASCII `Idempotency-Key`. Raw keys are never stored; SHA-256 digests are scoped by trusted actor class/ID, command intent, backend route template, and target type/ID. The complete validated closed command model is canonically bound after validation. Exact completed replay returns the stored safe result without execution, while a changed body returns `409 COMMAND_IDEMPOTENCY_CONFLICT`. Secret-bearing records store only safe callback-credential metadata and `PlaintextIssued`; exact replay projects `AlreadyIssued` in memory and returns no plaintext.
 
-The public intake endpoint and protected request detail remain as documented. Machine HMAC, nonce, and command-idempotency infrastructure exists but is unattached to production commands. No AI start/callback runtime, callback plaintext generation, provider integration, credential rotation, n8n workflow, publisher, or frontend exists. `/health` remains database-, JWKS-, and secret-resolver-independent.
+The public intake endpoint and protected request detail remain as documented. Start AI uses machine HMAC, nonce, and command idempotency, but leaves its attempt `Pending`. No attempt-start command, callback endpoint, provider invocation, interpretation, credential replacement, n8n workflow, publisher, or frontend exists. `/health` remains database-, JWKS-, generator-, and secret-resolver-independent.

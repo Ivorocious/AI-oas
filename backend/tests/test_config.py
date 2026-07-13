@@ -46,6 +46,20 @@ def test_machine_timing_settings_are_bounded_and_retention_exceeds_skew() -> Non
         )
 
 
+def test_ai_execution_settings_are_safe_bounded_and_project_prefixed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AI_OPS_AI_MODEL_NAME", "synthetic-model-v2")
+    settings = Settings(_env_file=None)
+    assert settings.ai_model_name == "synthetic-model-v2"
+    assert settings.ai_callback_authorization_seconds == 1800
+    for seconds in (299, 86401):
+        with pytest.raises(ValidationError):
+            Settings(ai_callback_authorization_seconds=seconds, _env_file=None)
+    with pytest.raises(ValidationError):
+        Settings(ai_adapter_name="   ", _env_file=None)
+
+
 def test_unknown_dotenv_configuration_is_rejected(tmp_path: Path) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text("AI_OPS_UNKNOWN_SETTING=unexpected\n", encoding="utf-8")

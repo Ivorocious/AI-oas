@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the approved Phase 1 persistence design. Sixteen of 27 representations are structurally implemented, including `command_idempotency_records`; eleven representations remain unimplemented. Credential values remain external. Nonce insertion and transaction-local command `Processing`/`Completed` reservation, replay, conflict, and safe completion are executable, while nonce/record cleanup and integration with a production domain command remain unimplemented.
+This document defines the approved Phase 1 persistence design. Sixteen of 27 representations remain implemented; Start AI adds no representation or migration. The command now uses the existing service request, logical operation, attempt, callback-credential, command-idempotency, audit, and outbox structures in one transaction. Callback plaintext exists only in memory until commit and only its hash is persisted. Cleanup, credential replacement, attempt execution, callbacks, and the remaining eleven representations remain unimplemented.
 
 The names below are proposed relational names, not finalized SQL identifiers. Exact data types, lengths, encryption facilities, partitioning, and physical storage parameters remain migration-design decisions.
 

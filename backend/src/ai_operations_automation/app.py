@@ -10,6 +10,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from ai_operations_automation.api.health import router as health_router
 from ai_operations_automation.api.intake import router as intake_router
 from ai_operations_automation.api.service_requests import router as service_requests_router
+from ai_operations_automation.api.start_ai_interpretation import (
+    router as start_ai_interpretation_router,
+)
 from ai_operations_automation.auth.verifier import SupabaseJwtVerifier, url_jwks_loader
 from ai_operations_automation.config import Settings, get_settings
 from ai_operations_automation.db import create_database_engine, create_session_factory
@@ -18,6 +21,7 @@ from ai_operations_automation.machine_auth.secrets import (
     MachineSecretResolver,
     UnavailableMachineSecretResolver,
 )
+from ai_operations_automation.start_ai.credentials import generate_callback_credential
 
 
 def create_app(
@@ -26,6 +30,7 @@ def create_app(
     jwt_verifier: object | None = None,
     machine_secret_resolver: MachineSecretResolver | None = None,
     machine_clock: object | None = None,
+    callback_credential_generator: object | None = None,
 ) -> FastAPI:
     """Create an application without network or database side effects."""
     active_settings = settings or get_settings()
@@ -46,6 +51,9 @@ def create_app(
         machine_secret_resolver or UnavailableMachineSecretResolver()
     )
     application.state.machine_clock = machine_clock or (lambda: datetime.now(UTC))
+    application.state.callback_credential_generator = (
+        callback_credential_generator or generate_callback_credential
+    )
 
     @application.exception_handler(IntakeError)
     async def safe_api_error(_request: Request, error: IntakeError) -> JSONResponse:
@@ -61,4 +69,5 @@ def create_app(
     application.include_router(health_router)
     application.include_router(intake_router)
     application.include_router(service_requests_router)
+    application.include_router(start_ai_interpretation_router)
     return application

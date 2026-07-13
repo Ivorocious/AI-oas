@@ -36,6 +36,7 @@ class IntakeError(Exception):
     retryable: bool = False
     details: list[dict[str, str]] = field(default_factory=list)
     delivery_id: uuid.UUID | None = None
+    current_versions: dict[str, int] = field(default_factory=dict)
 
     def response(self, correlation_id: uuid.UUID) -> dict[str, Any]:
         return ErrorEnvelope(
@@ -45,6 +46,7 @@ class IntakeError(Exception):
                 correlation_id=correlation_id,
                 delivery_id=self.delivery_id,
                 retryable=self.retryable,
+                current_versions=self.current_versions,
                 details=[ErrorDetail(**detail) for detail in self.details],
             )
         ).model_dump(mode="json", exclude_none=True)

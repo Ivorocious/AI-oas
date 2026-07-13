@@ -32,6 +32,17 @@ class Settings(BaseSettings):
     jwks_cache_seconds: int = Field(default=300, ge=30, le=3600)
     machine_clock_skew_seconds: int = Field(default=300, ge=30, le=900)
     machine_nonce_retention_seconds: int = Field(default=600, ge=60, le=3600)
+    ai_interpretation_prompt_version: str = Field(
+        default="service-request-interpretation-v1", max_length=100
+    )
+    ai_interpretation_result_schema_version: str = Field(
+        default="service-request-interpretation-v1", max_length=100
+    )
+    ai_provider_name: str = Field(default="DemoAIProvider", max_length=100)
+    ai_model_name: str = Field(default="demo-ai-model-v1", max_length=100)
+    ai_adapter_name: str = Field(default="WorkflowServiceAIAdapter", max_length=100)
+    ai_adapter_version: str = Field(default="1.0", max_length=100)
+    ai_callback_authorization_seconds: int = Field(default=1800, ge=300, le=86400)
 
     @field_validator("app_name")
     @classmethod
@@ -55,6 +66,20 @@ class Settings(BaseSettings):
         skew = info.data.get("machine_clock_skew_seconds", 300)
         if value <= skew:
             raise ValueError("machine nonce retention must exceed clock skew")
+        return value
+
+    @field_validator(
+        "ai_interpretation_prompt_version",
+        "ai_interpretation_result_schema_version",
+        "ai_provider_name",
+        "ai_model_name",
+        "ai_adapter_name",
+        "ai_adapter_version",
+    )
+    @classmethod
+    def ai_configuration_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("AI configuration identity must not be blank")
         return value
 
 
