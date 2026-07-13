@@ -10,7 +10,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 no
 
 - Implemented migration `0011_proposal_approval_foundation`, bringing the application inventory to 26 tables. It adds the four approved proposal, contributor, frozen-exclusion, and exact-decision tables; generalizes logical operations without weakening AI constraints; and adds the request's same-request active-proposal reference.
 - Implemented six human-authenticated proposal commands for draft creation/editing, submission, approval, rejection, and material revision. The lifecycle preserves one series-owned outbound logical operation, deterministic closed-payload digests, immutable contributor carry-forward, frozen actor-UUID self-approval exclusions, exact decision binding, optimistic versions, command idempotency, and transactional audit/outbox evidence.
-- Published Checkpoint 3 implementation commit `619f2166c9e7e8c5e5c5ddae0e694cf7186069b8`. Its focused hardening correction follows as a separate commit; approval/rejection response identity, revision evidence, real concurrency, rollback injection, HTTP contracts, and the full 566-offline/345-integration gate now pass. Alembic remains `0011_proposal_approval_foundation`, with 26 application tables and 19 production paths.
+- Checkpoint 3 is complete. Implementation commit `619f2166c9e7e8c5e5c5ddae0e694cf7186069b8` and hardening commit `fa0d76580cfb3a258de0c3e5f7675eb1dc02697f` are pushed; approval/rejection response identity, revision evidence, real concurrency, rollback injection, HTTP contracts, and the full 566-offline/345-integration gate pass. Alembic remains `0011_proposal_approval_foundation`, with 26 application tables and 19 production paths.
 
 - Implemented migration `0010_deterministic_triage_foundation`, bringing the application inventory to 22 tables. It adds immutable `decision_policy_versions`, append-oriented `duplicate_candidates`, immutable `reviewed_fact_sets`, immutable `routing_decisions`, and ordered routing-decision/candidate links, with current routing/review summary fields on service requests. The migration seeds `general-service-demo@1.0.0` revision 1 with a canonical digest and restrictive identity references.
 - Implemented the complete ordered deterministic evaluator over allowlisted normalized facts, advisory interpretation evidence, duplicate evidence, reviewed facts, immutable policy content, and an explicit UTC evaluation instant. It reproduces category, priority, candidate scores, review precedence, status, queue, reason codes, and canonical input identity without letting AI output become canonical policy.
@@ -55,7 +55,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 no
 
 ## Active task
 
-None. Batch 2 deterministic triage and review passed its full acceptance gate; checkpoint publication is the remaining administrative step.
+No active Checkpoint 3 publication task remains. Checkpoint 3 is complete, and its implementation and hardening commits are pushed. The current next milestone is Checkpoint 4 — Mock outbound execution and recovery.
 
 ## Blockers
 

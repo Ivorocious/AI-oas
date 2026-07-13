@@ -2,11 +2,11 @@
 
 ## Current checkpoint
 
-- Current batch: Batch 3 — Proposal, approval, rejection, and material revision.
-- Batch status: published Checkpoint 3 and its focused hardening correction passed the complete acceptance gate; correction commit/push pending.
+- Current checkpoint: Checkpoint 3 — Proposal, approval, rejection, and material revision — is complete.
+- Published commits: implementation `619f2166c9e7e8c5e5c5ddae0e694cf7186069b8`; hardening `fa0d76580cfb3a258de0c3e5f7675eb1dc02697f`. Both commits are pushed.
 - Branch: `phase-2-completion`.
-- Current commit: `619f2166c9e7e8c5e5c5ddae0e694cf7186069b8` (published Checkpoint 3 implementation).
-- Remote tracking: `origin/phase-2-completion` at the same published implementation commit before the hardening correction; divergence `0/0`.
+- Current branch head: `fa0d76580cfb3a258de0c3e5f7675eb1dc02697f`.
+- Remote tracking: `origin/phase-2-completion` is at `fa0d76580cfb3a258de0c3e5f7675eb1dc02697f`; divergence `0/0`.
 
 ## Verified baseline
 
@@ -63,16 +63,16 @@
 - Guarantees added: deterministic payload digests, one outbound logical operation per proposal series, immutable contributor carry-forward, frozen UUID-based self-approval exclusions, exact proposal/version/digest decisions, optimistic concurrency, command idempotency, atomic safe audit/outbox evidence, and no outbound attempt or callback credential.
 - Acceptance gate: 566 offline tests and 317 PostgreSQL integration tests passed (883 collected). Migration `0011 -> 0010 -> 0011` and `0011 -> base -> 0011` round trips, Alembic drift checks, Ruff, 175-file format check, application import, 19-path OpenAPI inventory, 26-table inventory, and `git diff --check` passed.
 - Checkpoint history: Batch 1 is complete and pushed at `c65ca6f1bbb2b3c0b1c0a3841cdc348a5a7bbea4`; Batch 2 is complete and pushed at `65bcc8d70e158940b868792eba3e8c6fd9707400`.
-- Published implementation commit: `619f2166c9e7e8c5e5c5ddae0e694cf7186069b8`. A focused hardening correction follows it without rewriting that commit; Checkpoint 3 is complete only after the correction gate passes.
-- Hardening acceptance: 566 offline and 345 PostgreSQL integration tests passed (911 collected), including independent-session concurrency, injected rollback, six-route HTTP contracts, exact decision replay identity, truthful revision evidence, and redaction. Alembic remains `0011_proposal_approval_foundation`; application tables remain 26 and production paths remain 19.
+- Checkpoint 3 is complete and pushed: implementation commit `619f2166c9e7e8c5e5c5ddae0e694cf7186069b8` and hardening commit `fa0d76580cfb3a258de0c3e5f7675eb1dc02697f`.
+- Final hardening validation: 566 offline tests passed; 345 PostgreSQL integration tests passed; 911 tests were collected; Ruff passed; formatting passed; Alembic drift passed; OpenAPI passed. Alembic remains `0011_proposal_approval_foundation`; application tables remain 26 and production paths remain 19.
 
 ## Known limitations
 
 - Batch 3 adds proposal approval only. No outbound attempt or callback credential is created for outbound work; no provider is invoked and no email is sent. Outbound start/callback/retry/reconciliation belongs to Batch 4, while protected query expansion and final scenario acceptance belong to Batch 5.
 - The outbound portion of the immutable failure policy is seeded for later exact use, but no outbound operation, reconciliation runtime, provider invocation, or real side effect exists.
-- PostgreSQL Compose remains running during the completion run and will be removed after final validation.
+- PostgreSQL Compose was stopped after validation; the database volume was retained.
 - Runtime handoff note (2026-07-13): an earlier Codex escalation limit paused the run before staging. The project owner explicitly resumed execution; the complete validated Batch 1 worktree remained intact on `phase-2-completion`.
 
-## Exact next action
+## Next checkpoint
 
-Commit and push the validated hardening correction after `619f2166c9e7e8c5e5c5ddae0e694cf7186069b8`, then verify branch divergence `0/0`. Alembic remains `0011_proposal_approval_foundation`, with 26 application tables and 19 production paths. No outbound attempt, callback credential, provider invocation, or email exists. The next milestone remains Checkpoint 4. Batch 4 must reconcile the AI success-callback transport contract before generalizing callbacks to `OutboundAction`; the executable AI success request currently requires echoed prompt/provider/model/adapter identity beyond the shorter API-contract summary.
+Checkpoint 4 — Mock outbound execution and recovery. Batch 4 must reconcile the AI success-callback transport contract before generalizing callbacks to `OutboundAction`; the executable AI success request currently requires echoed prompt/provider/model/adapter identity beyond the shorter API-contract summary.
