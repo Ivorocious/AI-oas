@@ -4,9 +4,12 @@
 
 **Phase 2 — Executable Foundation: underway.**
 
-Phase 0 product definition and Phase 1 technical design are complete. Phase 2 now has a runnable foundation, atomic intake, the complete bounded AI-attempt execution/recovery lifecycle, and the deterministic triage/duplicate/human-review lifecycle. No implementation task is currently active between checkpoints. Remaining detailed decisions continue to be resolved incrementally within focused implementation tasks.
+Phase 0 product definition and Phase 1 technical design are complete. Phase 2 now has a runnable foundation, atomic intake, the complete bounded AI-attempt execution/recovery lifecycle, deterministic triage/duplicate/human review, and proposal approval. Remaining detailed decisions continue to be resolved incrementally within focused implementation tasks.
 
 ## Completed work
+
+- Implemented migration `0011_proposal_approval_foundation`, bringing the application inventory to 26 tables. It adds the four approved proposal, contributor, frozen-exclusion, and exact-decision tables; generalizes logical operations without weakening AI constraints; and adds the request's same-request active-proposal reference.
+- Implemented six human-authenticated proposal commands for draft creation/editing, submission, approval, rejection, and material revision. The lifecycle preserves one series-owned outbound logical operation, deterministic closed-payload digests, immutable contributor carry-forward, frozen actor-UUID self-approval exclusions, exact decision binding, optimistic versions, command idempotency, and transactional audit/outbox evidence.
 
 - Implemented migration `0010_deterministic_triage_foundation`, bringing the application inventory to 22 tables. It adds immutable `decision_policy_versions`, append-oriented `duplicate_candidates`, immutable `reviewed_fact_sets`, immutable `routing_decisions`, and ordered routing-decision/candidate links, with current routing/review summary fields on service requests. The migration seeds `general-service-demo@1.0.0` revision 1 with a canonical digest and restrictive identity references.
 - Implemented the complete ordered deterministic evaluator over allowlisted normalized facts, advisory interpretation evidence, duplicate evidence, reviewed facts, immutable policy content, and an explicit UTC evaluation instant. It reproduces category, priority, candidate scores, review precedence, status, queue, reason codes, and canonical input identity without letting AI output become canonical policy.
@@ -114,15 +117,15 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Known limitations
 
-- The backend includes atomic intake, human authentication, protected request detail, 22-table persistence, WorkflowService HMAC/nonce authentication, command idempotency, the complete bounded AI attempt success/failure/retry/replacement/stale lifecycle, deterministic triage, explicit duplicate resolution, and bounded human-review recalculation. `CompleteTriage` is trusted in-process functionality, not a public HTTP route. No provider invocation, proposal/approval runtime, outbound execution, real integration, n8n workflow, publisher, frontend, or deployment exists.
+- The backend includes atomic intake, human authentication, protected request detail, 26-table persistence, WorkflowService HMAC/nonce authentication, command idempotency, the complete bounded AI attempt lifecycle, deterministic triage/review, and proposal approval. `CompleteTriage` remains trusted in-process functionality. No outbound attempt, outbound callback credential, provider invocation, email execution, real integration, n8n workflow, publisher, frontend, or deployment exists.
 - Start AI generates one callback plaintext value in memory and issues it only after commit; only its SHA-256 hash and safe metadata are stored. No provider request/response body or real AI provider credential is created or stored.
-- The immutable demonstration failure policy, AI assessment/retry delays, AI stale boundaries, and immutable demonstration decision policy are executable. Proposal approval, outbound execution/reconciliation, and real-world policy calibration remain unimplemented.
+- The immutable demonstration failure policy, AI assessment/retry delays, AI stale boundaries, deterministic decision policy, and proposal approval lifecycle are executable. Outbound execution/reconciliation and real-world policy calibration remain unimplemented.
 - No real email is sent; only a proposed mock adapter is approved for the MVP.
 - The design targets one demonstration organization, one primary intake path, and modest operational scale.
 - Billing, payments, multi-tenancy, mobile apps, full CRM behavior, autonomous communication, large-scale analytics, numerous real integrations, enterprise authentication, microservices, and Kubernetes remain outside scope.
 
 ## Next milestone
 
-**Phase 2 — Proposal approval lifecycle.**
+**Checkpoint 4 — Mock outbound execution and recovery.**
 
-Implement proposal series, one outbound logical operation per series, immutable contributor attribution, frozen approval exclusions, exact proposal digests, and guarded create/edit/submit/approve/reject/material-revision commands. Do not start mock outbound execution until exact proposal approval exists.
+Reconcile the AI success-callback transport contract before generalizing callbacks to `OutboundAction`: the executable AI success request currently requires echoed prompt/provider/model/adapter identity beyond the shorter API-contract summary. Outbound start/callback/retry/reconciliation must preserve the exact approved proposal binding and must never send real email.

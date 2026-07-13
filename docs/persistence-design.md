@@ -1,5 +1,7 @@
 # Proposed Postgres Persistence Design
 
+> Implementation status: revision `0011_proposal_approval_foundation` implements the approved four-table proposal boundary, the request's same-request active reference, and the proposal-series-owned outbound logical operation. The database now has 26 application tables. No outbound attempt, callback credential, workflow, publisher, or fifth proposal table is added.
+
 ## Status and scope
 
 This document defines the approved Phase 1 persistence design. Seventeen of 27 representations are implemented through migration `0009_failure_recovery_foundation`, including immutable failure-policy versions and structured attempt/request recovery evidence. Start AI, claim/start, the three AI callbacks, bounded AI retry, callback-credential replacement, terminal disposition, and stale AI assessment use the implemented attempt, credential, policy, command-idempotency, audit, and outbox structures. Callback authorization uses constant-time credential proof and durable consumed-credential replay binding. The remaining ten representations, controlled cleanup jobs, outbound execution, and EventPublisher publication-attempt persistence remain unimplemented.

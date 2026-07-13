@@ -317,7 +317,7 @@ def test_second_migration_is_applied_and_deferrable(engine) -> None:
                 "AND condeferrable AND condeferred"
             )
         )
-    assert revision == "0010_deterministic_triage_foundation"
+    assert revision == "0011_proposal_approval_foundation"
     assert deferred == 2
 
 

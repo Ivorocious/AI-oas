@@ -6,7 +6,7 @@ The product remains configurable across service companies instead of assuming a 
 
 ## Status
 
-Phase 0 and Phase 1 are complete; Phase 2 is underway. The executable backend now includes intake, human access, the bounded AI attempt lifecycle, and deterministic triage/review. Migration `0010_deterministic_triage_foundation` seeds the immutable `general-service-demo@1.0.0` decision policy and brings the schema to 22 application tables. A trusted in-process `CompleteTriage` service—not a public route—derives duplicate candidates, category, priority, review outcome, status, and queue from current evidence. Human-authenticated duplicate resolution and complete-human-review commands preserve expected-version, command-idempotency, role, audit, outbox, and atomic transaction boundaries.
+Phase 0 and Phase 1 are complete; Phase 2 is underway. The executable backend now includes intake, human access, the bounded AI attempt lifecycle, deterministic triage/review, and the proposal approval lifecycle. Migration `0011_proposal_approval_foundation` brings the schema to 26 application tables and production OpenAPI exposes 19 paths. Proposal create, edit, submit, approve, reject, and material-revision commands use exact versions, deterministic payload digests, immutable contributors, frozen self-approval exclusions, one outbound logical operation per series, command idempotency, and atomic safe evidence.
 
 - [Backend setup, startup, and validation](backend/README.md)
 
@@ -30,4 +30,4 @@ Phase 0 and Phase 1 are complete; Phase 2 is underway. The executable backend no
 
 ## Implementation honesty
 
-No AI provider is invoked. AI callback evidence remains advisory: only the deterministic backend evaluator can derive category, priority, queue, routing, and review state. The current implementation has no public complete-triage endpoint; trusted backend code invokes that service in process. Proposal/approval behavior, mock outbound execution, real integrations, n8n workflows, event publication, frontend, and deployment remain unimplemented.
+No AI or outbound provider is invoked. AI callback evidence remains advisory: only the deterministic backend evaluator can derive category, priority, queue, routing, and review state. The current implementation has no public complete-triage endpoint; trusted backend code invokes that service in process. Proposal commands create no integration attempt or callback credential and send no email. Outbound start/callback/retry/reconciliation, protected query expansion, final scenario acceptance, real integrations, n8n workflows, event publication, frontend, and deployment remain unimplemented.

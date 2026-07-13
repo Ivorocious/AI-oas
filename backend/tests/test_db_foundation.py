@@ -34,6 +34,10 @@ EXPECTED_TABLES = {
     "reviewed_fact_sets",
     "routing_decisions",
     "routing_decision_duplicate_candidates",
+    "proposed_actions",
+    "proposed_action_contributors",
+    "proposal_approval_exclusions",
+    "approval_decisions",
 }
 
 NEW_AI_TABLES = {
@@ -61,7 +65,7 @@ def test_engine_and_session_construction_do_not_connect(
     engine.dispose()
 
 
-def test_model_metadata_contains_exactly_twenty_two_application_tables() -> None:
+def test_model_metadata_contains_exactly_twenty_six_application_tables() -> None:
     assert set(Base.metadata.tables) == EXPECTED_TABLES
     assert NEW_AI_TABLES <= set(Base.metadata.tables)
 

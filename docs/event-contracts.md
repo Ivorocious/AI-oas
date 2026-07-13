@@ -1,5 +1,7 @@
 # Proposed Event and n8n Contracts
 
+> Implementation status: Checkpoint 3 emits allowlisted, PII-minimized proposal/approval outbox events transactionally with separate canonical audit records. Destination, content, scheduling notes, and raw rejection rationale are never copied into either evidence channel.
+
 ## Status and scope
 
 This document defines the approved integration-event and n8n boundaries. Atomic intake and the two implemented AI commands create PII-minimized `Pending` outbox rows transactionally with canonical audit evidence. Start AI creates `integration_attempt.created`; claim/start creates `integration_attempt.started` when its exact attempt becomes `Running`. No publisher, message transport, n8n workflow, provider invocation, callback, or event consumer is implemented.

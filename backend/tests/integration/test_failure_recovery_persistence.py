@@ -25,7 +25,7 @@ from alembic import command
 pytestmark = pytest.mark.integration
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 PREVIOUS_HEAD = "0008_callback_command_authorization_binding"
-CURRENT_HEAD = "0010_deterministic_triage_foundation"
+CURRENT_HEAD = "0011_proposal_approval_foundation"
 POLICY_TABLE = "failure_recovery_policy_versions"
 SEEDED_POLICY_TABLES = {POLICY_TABLE, "decision_policy_versions"}
 HASH_A = "a" * 64

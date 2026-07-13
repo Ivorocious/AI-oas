@@ -68,15 +68,49 @@ class LogicalOperation(Base):
             "configuration_hash",
             name="uq_logical_operations_ai_identity",
         ),
-        CheckConstraint("operation_kind = 'AIInterpretation'", name="operation_kind_valid"),
-        CheckConstraint(HASH_CHECK.format(column="input_hash"), name="input_hash_valid"),
+        UniqueConstraint(
+            "service_request_id",
+            "proposal_series_id",
+            name="uq_logical_operations_outbound_series",
+        ),
+        UniqueConstraint(
+            "id",
+            "service_request_id",
+            "proposal_series_id",
+            name="uq_logical_operations_outbound_identity",
+        ),
+        CheckConstraint(
+            "operation_kind IN ('AIInterpretation', 'OutboundAction')",
+            name="operation_kind_valid",
+        ),
+        CheckConstraint(
+            "input_hash IS NULL OR " + HASH_CHECK.format(column="input_hash"),
+            name="input_hash_valid",
+        ),
         CheckConstraint(
             HASH_CHECK.format(column="configuration_hash"), name="configuration_hash_valid"
         ),
         CheckConstraint("version > 0", name="version_positive"),
         *(
-            CheckConstraint(f"char_length(trim({field})) > 0", name=f"{field}_not_blank")
+            CheckConstraint(
+                f"{field} IS NULL OR char_length(trim({field})) > 0",
+                name=f"{field}_not_blank",
+            )
             for field in NONBLANK_FIELDS
+        ),
+        CheckConstraint(
+            "(operation_kind = 'AIInterpretation' AND proposal_series_id IS NULL "
+            "AND input_hash IS NOT NULL AND configuration_hash IS NOT NULL "
+            "AND prompt_version IS NOT NULL AND result_schema_version IS NOT NULL "
+            "AND provider_name IS NOT NULL AND model_name IS NOT NULL "
+            "AND adapter_name IS NOT NULL AND adapter_version IS NOT NULL) OR "
+            "(operation_kind = 'OutboundAction' AND proposal_series_id IS NOT NULL "
+            "AND input_hash IS NULL AND configuration_hash IS NULL "
+            "AND prompt_version IS NULL AND result_schema_version IS NULL "
+            "AND provider_name IS NULL AND model_name IS NULL "
+            "AND adapter_name IS NULL AND adapter_version IS NULL "
+            "AND outbound_execution_key IS NULL)",
+            name="kind_fields_consistent",
         ),
         Index("ix_logical_operations_service_request_created", "service_request_id", "created_at"),
     )
@@ -88,14 +122,16 @@ class LogicalOperation(Base):
         nullable=False,
     )
     operation_kind: Mapped[str] = mapped_column(String(32), nullable=False)
-    input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    configuration_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    prompt_version: Mapped[str] = mapped_column(String(100), nullable=False)
-    result_schema_version: Mapped[str] = mapped_column(String(100), nullable=False)
-    provider_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    model_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    adapter_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    adapter_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    proposal_series_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    outbound_execution_key: Mapped[str | None] = mapped_column(String(128))
+    input_hash: Mapped[str | None] = mapped_column(String(64))
+    configuration_hash: Mapped[str | None] = mapped_column(String(64))
+    prompt_version: Mapped[str | None] = mapped_column(String(100))
+    result_schema_version: Mapped[str | None] = mapped_column(String(100))
+    provider_name: Mapped[str | None] = mapped_column(String(100))
+    model_name: Mapped[str | None] = mapped_column(String(100))
+    adapter_name: Mapped[str | None] = mapped_column(String(100))
+    adapter_version: Mapped[str | None] = mapped_column(String(100))
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     succeeded_attempt_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

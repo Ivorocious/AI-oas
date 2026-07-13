@@ -2,10 +2,10 @@
 
 ## Current checkpoint
 
-- Current batch: Batch 2 — Deterministic triage, duplicate handling, and human review.
+- Current batch: Batch 3 — Proposal, approval, rejection, and material revision.
 - Batch status: implementation and full acceptance gate passed; checkpoint commit/push pending.
 - Branch: `phase-2-completion`.
-- Current commit: `c65ca6f1bbb2b3c0b1c0a3841cdc348a5a7bbea4`.
+- Current commit: `65bcc8d70e158940b868792eba3e8c6fd9707400`.
 - Remote tracking: `origin/phase-2-completion` at the same commit; divergence `0/0`.
 
 ## Verified baseline
@@ -52,17 +52,25 @@
 
 ## Remaining batches
 
-1. Add proposal approval lifecycle.
-2. Add mock outbound execution lifecycle.
-3. Complete protected queries and Phase 2 acceptance.
+1. Add mock outbound execution lifecycle.
+2. Complete protected queries and Phase 2 acceptance.
+
+## Completed Batch 3 implementation
+
+- Migration added: `0011_proposal_approval_foundation` (parent `0010_deterministic_triage_foundation`), bringing the application inventory from 22 to 26 tables.
+- Tables added: `proposed_actions`, `proposed_action_contributors`, `proposal_approval_exclusions`, and `approval_decisions`.
+- Commands added: proposal draft create/edit, submit for approval, exact approve/reject, and material revision; production OpenAPI now contains 19 paths.
+- Guarantees added: deterministic payload digests, one outbound logical operation per proposal series, immutable contributor carry-forward, frozen UUID-based self-approval exclusions, exact proposal/version/digest decisions, optimistic concurrency, command idempotency, atomic safe audit/outbox evidence, and no outbound attempt or callback credential.
+- Acceptance gate: 566 offline tests and 317 PostgreSQL integration tests passed (883 collected). Migration `0011 -> 0010 -> 0011` and `0011 -> base -> 0011` round trips, Alembic drift checks, Ruff, 175-file format check, application import, 19-path OpenAPI inventory, 26-table inventory, and `git diff --check` passed.
+- Checkpoint history: Batch 1 is complete and pushed at `c65ca6f1bbb2b3c0b1c0a3841cdc348a5a7bbea4`; Batch 2 is complete and pushed at `65bcc8d70e158940b868792eba3e8c6fd9707400`.
 
 ## Known limitations
 
-- Batch 2 adds deterministic triage/review only. Proposal/approval, outbound execution, and expanded queries remain for Batches 3–5.
+- Batch 3 adds proposal approval only. No outbound attempt or callback credential is created for outbound work; no provider is invoked and no email is sent. Outbound start/callback/retry/reconciliation belongs to Batch 4, while protected query expansion and final scenario acceptance belong to Batch 5.
 - The outbound portion of the immutable failure policy is seeded for later exact use, but no outbound operation, reconciliation runtime, provider invocation, or real side effect exists.
 - PostgreSQL Compose remains running during the completion run and will be removed after final validation.
 - Runtime handoff note (2026-07-13): an earlier Codex escalation limit paused the run before staging. The project owner explicitly resumed execution; the complete validated Batch 1 worktree remained intact on `phase-2-completion`.
 
 ## Exact next action
 
-Stage the reviewed Batch 2 scope, commit exactly `feat: add deterministic triage and review lifecycle`, push the checkpoint, and verify branch divergence `0/0` before starting Batch 3.
+Complete the Batch 3 final gate, stage the reviewed scope, commit exactly `feat: add proposal approval lifecycle`, push the checkpoint, and verify branch divergence `0/0` before starting Batch 4. Batch 4 must reconcile the AI success-callback transport contract before generalizing callbacks to `OutboundAction`; the executable AI success request currently requires echoed prompt/provider/model/adapter identity beyond the shorter API-contract summary.

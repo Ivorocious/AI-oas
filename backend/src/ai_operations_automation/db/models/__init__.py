@@ -31,12 +31,19 @@ from ai_operations_automation.db.models.machine import (
     MachineIdentity,
     MachineRequestNonce,
 )
+from ai_operations_automation.db.models.proposal import (
+    ApprovalDecision,
+    ProposalApprovalExclusion,
+    ProposedAction,
+    ProposedActionContributor,
+)
 
 __all__ = [
     "AcceptedIntakeKey",
     "AiInterpretation",
     "ApplicationActor",
     "ApplicationActorRoleAssignment",
+    "ApprovalDecision",
     "AuditEvent",
     "AttemptCallbackCredential",
     "Contact",
@@ -51,6 +58,9 @@ __all__ = [
     "MachineIdentity",
     "MachineRequestNonce",
     "OutboxMessage",
+    "ProposalApprovalExclusion",
+    "ProposedAction",
+    "ProposedActionContributor",
     "ReviewedFactSet",
     "RoutingDecision",
     "RoutingDecisionDuplicateCandidate",

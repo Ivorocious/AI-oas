@@ -25,7 +25,7 @@ from alembic import command
 pytestmark = pytest.mark.integration
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 PREVIOUS_HEAD = "0009_failure_recovery_foundation"
-CURRENT_HEAD = "0010_deterministic_triage_foundation"
+CURRENT_HEAD = "0011_proposal_approval_foundation"
 SEEDED_POLICY_TABLES = {
     "decision_policy_versions",
     "failure_recovery_policy_versions",
@@ -199,7 +199,7 @@ def _constraint_name(error: pytest.ExceptionInfo[IntegrityError]) -> str:
 
 def test_head_has_exactly_twenty_two_application_tables(engine: Engine) -> None:
     assert set(inspect(engine).get_table_names()) == set(Base.metadata.tables) | {"alembic_version"}
-    assert len(Base.metadata.tables) == 22
+    assert len(Base.metadata.tables) == 26
     assert NEW_TABLES <= set(Base.metadata.tables)
     with engine.connect() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == CURRENT_HEAD

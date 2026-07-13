@@ -1,5 +1,7 @@
 # Proposed API Contracts
 
+> Implementation status: Checkpoint 3 implements the six proposal command routes described here. They use closed bodies, human bearer authentication, current application roles, required `Idempotency-Key`, exact aggregate versions, and exact frozen-digest binding. Proposal query routes remain deferred.
+
 ## Status and scope
 
 This document defines the approved HTTP contracts for the MVP. Public intake, protected request detail, Start AI Interpretation, claim/start, all three AI result callbacks, AI retry, callback-credential replacement, manager terminal disposition, duplicate resolution, and complete human review are implemented. Deterministic `CompleteTriage` is implemented as a trusted in-process BackendService operation and deliberately has no public route. WorkflowService commands use HMAC and nonce persistence; callbacks add exact attempt-credential proof. Mutations use command idempotency, expected versions, and atomic transactions.

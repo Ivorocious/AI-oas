@@ -174,6 +174,13 @@ class ServiceRequest(Base):
             ondelete="RESTRICT",
             use_alter=True,
         ),
+        ForeignKeyConstraint(
+            ("current_proposed_action_id", "id"),
+            ("proposed_actions.id", "proposed_actions.service_request_id"),
+            name="fk_service_request_current_proposed_action_identity",
+            ondelete="RESTRICT",
+            use_alter=True,
+        ),
         CheckConstraint("version > 0", name="version_positive"),
         CheckConstraint(
             "char_length(trim(normalized_request_description)) > 0",
@@ -228,6 +235,7 @@ class ServiceRequest(Base):
         Index("ix_service_requests_status_queue_priority", "status", "current_queue", "priority"),
         Index("ix_service_requests_recovery_attempt_id", "recovery_attempt_id"),
         Index("ix_service_requests_current_routing_decision_id", "current_routing_decision_id"),
+        Index("ix_service_requests_current_proposed_action_id", "current_proposed_action_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -264,6 +272,7 @@ class ServiceRequest(Base):
     current_routing_decision_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     review_required: Mapped[bool | None] = mapped_column(Boolean)
     review_reason_codes: Mapped[list[str] | None] = mapped_column(JSONB)
+    current_proposed_action_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     recovery_target: Mapped[str | None] = mapped_column(String(32))
     recovery_attempt_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

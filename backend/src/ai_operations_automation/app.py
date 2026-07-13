@@ -15,6 +15,7 @@ from ai_operations_automation.api.duplicate_resolution import router as duplicat
 from ai_operations_automation.api.health import router as health_router
 from ai_operations_automation.api.human_review import router as human_review_router
 from ai_operations_automation.api.intake import router as intake_router
+from ai_operations_automation.api.proposals import router as proposals_router
 from ai_operations_automation.api.retry_ai import router as retry_ai_router
 from ai_operations_automation.api.service_requests import router as service_requests_router
 from ai_operations_automation.api.start_ai_interpretation import (
@@ -31,6 +32,7 @@ from ai_operations_automation.machine_auth.secrets import (
     MachineSecretResolver,
     UnavailableMachineSecretResolver,
 )
+from ai_operations_automation.proposal.service import ProposalLifecycleService
 from ai_operations_automation.start_ai.credentials import generate_callback_credential
 
 
@@ -43,6 +45,7 @@ def create_app(
     callback_credential_generator: object | None = None,
     duplicate_resolution_service: object | None = None,
     human_review_service: object | None = None,
+    proposal_service: object | None = None,
 ) -> FastAPI:
     """Create an application without network or database side effects."""
     active_settings = settings or get_settings()
@@ -70,6 +73,9 @@ def create_app(
         duplicate_resolution_service or ResolveDuplicateService(session_factory)
     )
     application.state.human_review_service = human_review_service or CompleteHumanReviewService(
+        session_factory
+    )
+    application.state.proposal_service = proposal_service or ProposalLifecycleService(
         session_factory
     )
 
@@ -119,6 +125,7 @@ def create_app(
     application.include_router(duplicate_resolution_router)
     application.include_router(intake_router)
     application.include_router(human_review_router)
+    application.include_router(proposals_router)
     application.include_router(retry_ai_router)
     application.include_router(service_requests_router)
     application.include_router(start_ai_interpretation_router)

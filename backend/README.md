@@ -1,6 +1,6 @@
 # Backend executable foundation
 
-This directory contains the runnable FastAPI foundation, `GET /health`, PostgreSQL/SQLAlchemy/Alembic persistence, atomic public intake, a human-authenticated service-request detail query, the complete bounded AI-attempt lifecycle, and deterministic triage/review persistence and services.
+This directory contains the runnable FastAPI foundation, `GET /health`, PostgreSQL/SQLAlchemy/Alembic persistence, atomic public intake, a human-authenticated service-request detail query, the complete bounded AI-attempt lifecycle, deterministic triage/review, and proposal approval persistence and commands.
 
 It exposes `POST /api/v1/service-requests/{request_id}/commands/start-ai-interpretation` to an HMAC-authenticated `WorkflowService`. The command creates one logical operation, one `Pending` attempt, hash-only callback authorization, safe audit evidence, and one pending outbox row atomically. Claim/start and result callbacks change canonical state, but FastAPI never invokes an AI provider.
 
@@ -127,7 +127,7 @@ uv run alembic upgrade head
 docker compose down
 ```
 
-The migrations create 22 application tables: the previous 17 intake, access, AI execution, machine-security, idempotency, and failure-policy tables plus `decision_policy_versions`, `duplicate_candidates`, `reviewed_fact_sets`, `routing_decisions`, and `routing_decision_duplicate_candidates`.
+The migrations create 26 application tables. Revision `0011_proposal_approval_foundation` adds `proposed_actions`, `proposed_action_contributors`, `proposal_approval_exclusions`, and `approval_decisions`, generalizes logical operations for a proposal-series-owned `OutboundAction`, and adds the request's exact active-proposal reference.
 
 The execution tables now support the Start AI command. No real AI provider is called and callback plaintext is never stored; integration tests use synthetic in-memory credentials.
 
@@ -139,4 +139,4 @@ Reusable non-intake command idempotency accepts exactly one 8–128-character vi
 
 Callback-command authorization metadata is stored independently from secret-delivery metadata. The authorization binding identifies the credential that proved authority for a callback command; the secret-delivery fields identify a credential whose plaintext was issued once. Either or both groups may be present on a completed command record without placing plaintext in the safe response snapshot.
 
-The public intake endpoint and protected request detail remain as documented. Start AI leaves its attempt `Pending`; claim/start moves it to `Running`; callbacks complete success or backend-derived recovery. Deterministic triage, duplicate resolution, and bounded human-review recalculation are implemented without invoking an AI provider. Proposal/approval, outbound execution, real integrations, n8n workflows, the outbox publisher, and the frontend do not exist yet. `/health` remains database-, JWKS-, policy-, generator-, secret-resolver-, callback-verifier-, and command-independent.
+The public intake endpoint and protected request detail remain as documented. Start AI leaves its attempt `Pending`; claim/start moves it to `Running`; callbacks complete success or backend-derived recovery. Deterministic triage, duplicate resolution, bounded human-review recalculation, and proposal approval are implemented without invoking a provider. The six proposal commands require human bearer authentication, a current role, expected versions, and `Idempotency-Key`; approval and rejection additionally bind the exact frozen digest and reject every frozen contributor, including administrators. Proposal commands never create an integration attempt or callback credential. Outbound execution, real integrations, n8n workflows, the outbox publisher, and the frontend do not exist yet. `/health` remains database-, JWKS-, policy-, generator-, secret-resolver-, callback-verifier-, and command-independent.

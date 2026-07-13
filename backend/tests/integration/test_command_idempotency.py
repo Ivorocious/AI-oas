@@ -113,10 +113,10 @@ def assert_rejected(engine: Engine, values: dict) -> str:
 
 def test_migration_inventory_downgrade_and_reupgrade(engine: Engine) -> None:
     assert set(inspect(engine).get_table_names()) == set(Base.metadata.tables) | {"alembic_version"}
-    assert len(Base.metadata.tables) == 22
+    assert len(Base.metadata.tables) == 26
     with engine.connect() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "0010_deterministic_triage_foundation"
+            "0011_proposal_approval_foundation"
         )
     existing = completed_values()
     engine.dispose()

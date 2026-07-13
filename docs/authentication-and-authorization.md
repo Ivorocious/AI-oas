@@ -1,5 +1,7 @@
 # Proposed Authentication and Authorization Model
 
+> Implementation status: all six proposal commands require a verified human bearer token and exactly one active local role. `OperationsAgent`, `ManagerApprover`, and `Administrator` may create, edit, submit, or revise; only `ManagerApprover` and `Administrator` may approve or reject. Frozen contributor exclusions apply by actor UUID and admit no administrator bypass.
+
 ## Status and scope
 
 This document defines the fixed MVP identity, authentication, and authorization model. Human access and WorkflowService HMAC, nonce, command-idempotency, and attempt-scoped callback authentication protect the implemented boundaries. The assigned WorkflowService may start only its exact `Pending` AI attempt; result callbacks require HMAC plus the exact opaque credential inside the callback transaction. Callback replacement and constrained AI retry are implemented, including mixed human-or-machine retry authority that fails closed when credentials are missing or ambiguous. Human bearer authentication and current-role authorization now also protect duplicate resolution and complete human review. Trusted in-process BackendService authority executes deterministic `CompleteTriage`; it is not exposed as a reusable credential or public route. Proposal approval, outbound execution, EventPublisher execution, controlled rotation operations, and hosted secret-manager integration remain unimplemented.

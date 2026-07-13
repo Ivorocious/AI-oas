@@ -30,6 +30,12 @@ EXPECTED_ROUTES = {
     "/api/v1/integration-attempts/{attempt_id}/commands/start",
     ("/api/v1/service-requests/{request_id}/duplicate-candidates/{candidate_id}/commands/resolve"),
     "/api/v1/service-requests/{request_id}/commands/complete-human-review",
+    "/api/v1/service-requests/{request_id}/proposed-actions",
+    "/api/v1/proposed-actions/{action_id}/draft",
+    "/api/v1/proposed-actions/{action_id}/commands/submit-for-approval",
+    "/api/v1/proposed-actions/{action_id}/commands/approve",
+    "/api/v1/proposed-actions/{action_id}/commands/reject",
+    "/api/v1/proposed-actions/{action_id}/commands/create-material-revision",
     *BATCH_1_ROUTES,
 }
 
