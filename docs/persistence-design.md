@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the approved Phase 1 persistence design. Sixteen of 27 representations remain implemented; Start AI adds no representation or migration. The command now uses the existing service request, logical operation, attempt, callback-credential, command-idempotency, audit, and outbox structures in one transaction. Callback plaintext exists only in memory until commit and only its hash is persisted. Cleanup, credential replacement, attempt execution, callbacks, and the remaining eleven representations remain unimplemented.
+This document defines the approved Phase 1 persistence design. Sixteen of 27 representations remain implemented; Start AI and claim/start add no representation or migration. Claim/start uses existing attempt, callback metadata, command-idempotency, audit, and outbox structures while keeping attempt bindings immutable and changing only guarded `Pending → Running` lifecycle/version/start fields. Callback hash is not read or changed. Cleanup, credential replacement, callbacks, and the remaining eleven representations remain unimplemented.
 
 The names below are proposed relational names, not finalized SQL identifiers. Exact data types, lengths, encryption facilities, partitioning, and physical storage parameters remain migration-design decisions.
 

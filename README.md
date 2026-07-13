@@ -6,7 +6,7 @@ The product remains configurable across service companies instead of assuming a 
 
 ## Status
 
-Phase 0 and Phase 1 are complete; Phase 2 is underway. The executable backend now includes intake, human access, AI execution persistence, WorkflowService authentication, command idempotency, and the first production WorkflowService business command. Start AI Interpretation creates one `Pending` AI attempt and issues its callback credential once after the atomic transaction commits.
+Phase 0 and Phase 1 are complete; Phase 2 is underway. The executable backend now includes intake, human access, AI execution persistence, WorkflowService authentication, command idempotency, and two production WorkflowService commands. Start AI Interpretation creates one `Pending` AI attempt; claim/start moves that exact assigned attempt to `Running` without invoking a provider.
 
 - [Backend setup, startup, and validation](backend/README.md)
 
@@ -30,4 +30,4 @@ Phase 0 and Phase 1 are complete; Phase 2 is underway. The executable backend no
 
 ## Implementation honesty
 
-No AI provider is invoked, no attempt is started, and no callback or interpretation/triage result endpoint exists. Machine secret storage, credential replacement, deterministic triage, n8n workflows, publishing, frontend, and deployment remain unimplemented.
+No AI provider is invoked and no callback or interpretation/triage result endpoint exists. Machine secret storage, callback authentication, credential replacement, deterministic triage, n8n workflows, publishing, frontend, and deployment remain unimplemented.

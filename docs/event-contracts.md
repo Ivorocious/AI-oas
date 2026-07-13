@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the approved integration-event and n8n boundaries. Atomic intake and Start AI Interpretation create PII-minimized `Pending` outbox rows transactionally with canonical audit evidence. Start AI creates `integration_attempt.created` for its exact `Pending` attempt. No publisher, message transport, n8n workflow, provider invocation, callback authentication, or event consumer is implemented.
+This document defines the approved integration-event and n8n boundaries. Atomic intake and the two implemented AI commands create PII-minimized `Pending` outbox rows transactionally with canonical audit evidence. Start AI creates `integration_attempt.created`; claim/start creates `integration_attempt.started` when its exact attempt becomes `Running`. No publisher, message transport, n8n workflow, provider invocation, callback, or event consumer is implemented.
 
 ## Record types and authority
 

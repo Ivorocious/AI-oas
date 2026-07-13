@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session, sessionmaker
 
+from ai_operations_automation.api.attempt_start import router as attempt_start_router
 from ai_operations_automation.api.health import router as health_router
 from ai_operations_automation.api.intake import router as intake_router
 from ai_operations_automation.api.service_requests import router as service_requests_router
@@ -67,6 +68,7 @@ def create_app(
         )
 
     application.include_router(health_router)
+    application.include_router(attempt_start_router)
     application.include_router(intake_router)
     application.include_router(service_requests_router)
     application.include_router(start_ai_interpretation_router)

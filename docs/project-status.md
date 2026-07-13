@@ -8,6 +8,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 ha
 
 ## Completed work
 
+- Implemented and validated `POST /api/v1/integration-attempts/{attempt_id}/commands/start`: an HMAC-authenticated assigned WorkflowService resolves command idempotency before domain reads, locks the attempt/operation/request/callback context, validates owner input and expiry, moves only `Pending → Running` with PostgreSQL time, and commits one audit/outbox/idempotency result atomically. It returns no credential and invokes no provider.
 - Implemented and validated the first production WorkflowService business command, `POST /api/v1/service-requests/{request_id}/commands/start-ai-interpretation`. It authenticates HMAC and commits the nonce, resolves command idempotency before domain reads, locks and version-checks the `TriagePending` request, creates one AI logical operation and `Pending` attempt, persists only the one-time callback credential hash, increments the request version, and commits safe audit/outbox/idempotency evidence atomically before returning plaintext once. Exact replay returns `AlreadyIssued` without plaintext; no AI provider is invoked.
 - Implemented and validated the reusable non-intake command-idempotency foundation: migration `0007_command_idempotency_foundation`, trusted full-scope reservations, strict key digesting, canonical validated-body binding, savepoint race resolution, safe completion/replay/conflict behavior, and non-secret one-time-delivery receipt metadata. No production command was added.
 - Implemented and validated reusable WorkflowService HMAC-SHA256 verification, application-controlled machine identity/external credential metadata, current/previous rotation overlap, and committed nonce replay protection. No production machine route or command was added.
@@ -40,7 +41,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 ha
 
 ## Active task
 
-None. Start AI Interpretation is complete.
+None. Claim/start AI attempt is complete.
 
 ## Blockers
 
@@ -103,7 +104,7 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Known limitations
 
-- The backend includes atomic intake, human authentication, protected request detail, sixteen-table persistence, WorkflowService HMAC/nonce authentication, command idempotency, and the Start AI Interpretation command. No attempt-start command, provider invocation, callback route, retry runtime, n8n workflow, publisher, frontend, or deployment exists.
+- The backend includes atomic intake, human authentication, protected request detail, sixteen-table persistence, WorkflowService HMAC/nonce authentication, command idempotency, Start AI Interpretation, and claim/start AI attempt. No provider invocation, callback route/authentication, retry runtime, n8n workflow, publisher, frontend, or deployment exists.
 - Start AI generates one callback plaintext value in memory and issues it only after commit; only its SHA-256 hash and safe metadata are stored. No provider request/response body or real AI provider credential is created or stored.
 - The demonstration policies define triage thresholds, failure taxonomy, retry budgets and delays, stale assessment, and uncertain-outcome reconciliation, but none is implemented. Real-world calibration remains deferred.
 - No real email is sent; only a proposed mock adapter is approved for the MVP.
@@ -112,6 +113,6 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Next milestone
 
-**Phase 2 — Claim/start AI attempt command.**
+**Phase 2 — Attempt-scoped callback authentication foundation.**
 
-Move one exact assigned `Pending` attempt to `Running` under WorkflowService authentication, command idempotency, expected attempt version, owner validity, and safe audit/outbox evidence.
+Implement reusable verification of a WorkflowService HMAC request plus an opaque callback credential against one exact `Running` attempt, operation kind, service identity/environment, active state, expiry, and constant-time stored-hash comparison.

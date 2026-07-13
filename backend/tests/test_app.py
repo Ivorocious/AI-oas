@@ -155,6 +155,7 @@ def test_route_inventory_and_interpretation_reference_is_nullable_uuid() -> None
         "/api/v1/intake/service-requests",
         "/api/v1/service-requests/{request_id}",
         "/api/v1/service-requests/{request_id}/commands/start-ai-interpretation",
+        "/api/v1/integration-attempts/{attempt_id}/commands/start",
     }
     field = schema["components"]["schemas"]["ActiveReferences"]["properties"][
         "current_interpretation_id"

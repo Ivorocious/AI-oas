@@ -64,7 +64,7 @@ Integration tests require the Compose PostgreSQL service. Foundation tests do no
 
 ## Start AI interpretation
 
-The production command requires `X-Service-ID`, `X-Service-Timestamp`, `X-Service-Nonce`, `X-Service-Signature`, `X-Correlation-ID`, and a visible-ASCII `Idempotency-Key`. The HMAC covers the exact raw JSON body. Its closed body is:
+The production command requires `X-Service-ID`, `X-Service-Timestamp`, `X-Service-Nonce`, `X-Service-Signature`, and a visible-ASCII `Idempotency-Key`. `X-Correlation-ID` is optional; the backend generates one when absent and returns the accepted value in the response body and header. The HMAC covers the exact raw JSON body. Its closed body is:
 
 ```json
 {
@@ -75,6 +75,20 @@ The production command requires `X-Service-ID`, `X-Service-Timestamp`, `X-Servic
 ```
 
 The first committed execution returns `202 Accepted`, a `Pending` attempt, and one opaque callback credential with `credential_delivery: PlaintextIssued`. An exact replay with a fresh HMAC nonce returns `200 OK`, the original safe identifiers, and `credential_delivery: AlreadyIssued` without plaintext. Only the SHA-256 credential hash is stored. Do not place a real machine HMAC key, callback credential, or signature in documentation, `.env`, Git, or logs.
+
+## Claim/start AI attempt
+
+`POST /api/v1/integration-attempts/{attempt_id}/commands/start` requires the same four WorkflowService HMAC headers plus `Idempotency-Key`; correlation remains optional. Its closed body is:
+
+```json
+{
+  "schema_version": "1.0",
+  "expected_versions": { "integration_attempt": 1 },
+  "command": {}
+}
+```
+
+The authenticated stable service ID and environment must exactly match the backend-created assignment. With the expected version and valid owner/callback context, the command moves only that attempt from `Pending` to `Running`, increments its version, and records PostgreSQL start time plus safe audit/outbox evidence. It returns no callback credential and invokes no provider. Exact replay returns the original safe `200 OK` result with the current correlation ID.
 
 Public intake remains unauthenticated. `GET /api/v1/service-requests/{request_id}` requires a valid bearer token whose verified Supabase subject maps to an active local application actor with a current allowed role. The intake `Location` UUID alone grants no read access.
 
@@ -98,4 +112,4 @@ Machine secrets are resolved through an injected external resolver from stored n
 
 Reusable non-intake command idempotency accepts exactly one 8–128-character visible-ASCII `Idempotency-Key`. Raw keys are never stored; SHA-256 digests are scoped by trusted actor class/ID, command intent, backend route template, and target type/ID. The complete validated closed command model is canonically bound after validation. Exact completed replay returns the stored safe result without execution, while a changed body returns `409 COMMAND_IDEMPOTENCY_CONFLICT`. Secret-bearing records store only safe callback-credential metadata and `PlaintextIssued`; exact replay projects `AlreadyIssued` in memory and returns no plaintext.
 
-The public intake endpoint and protected request detail remain as documented. Start AI uses machine HMAC, nonce, and command idempotency, but leaves its attempt `Pending`. No attempt-start command, callback endpoint, provider invocation, interpretation, credential replacement, n8n workflow, publisher, or frontend exists. `/health` remains database-, JWKS-, generator-, and secret-resolver-independent.
+The public intake endpoint and protected request detail remain as documented. Start AI leaves its attempt `Pending`; claim/start moves it to `Running`. No callback endpoint, provider invocation, interpretation, credential replacement, n8n workflow, publisher, or frontend exists. `/health` remains database-, JWKS-, generator-, secret-resolver-, and attempt-command-independent.
