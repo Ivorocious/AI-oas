@@ -2,11 +2,10 @@
 
 import re
 import uuid
-from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, SessionTransaction, SessionTransactionOrigin
 
 from ai_operations_automation.command_idempotency.keys import command_key_digest
 from ai_operations_automation.command_idempotency.models import (
@@ -27,7 +26,6 @@ class CommandIdempotencyService:
 
     def __init__(self, session: Session) -> None:
         self.session = session
-        self._owner_token = object()
 
     def reserve(
         self,
@@ -36,6 +34,7 @@ class CommandIdempotencyService:
         canonical_body_hash: str,
         correlation_id: uuid.UUID,
     ) -> NewCommandReservation | CompletedCommandReplay:
+        outer_transaction = self._require_outer_transaction()
         if HASH.fullmatch(canonical_body_hash) is None:
             raise ValueError("canonical body hash must be lowercase SHA-256 hexadecimal")
         key_digest = command_key_digest(raw_key)
@@ -78,7 +77,8 @@ class CommandIdempotencyService:
             record_id=record.id,
             command_id=record.command_id,
             correlation_id=record.correlation_id,
-            _owner_token=self._owner_token,
+            _session=self.session,
+            _outer_transaction=outer_transaction,
         )
 
     def complete(
@@ -88,18 +88,37 @@ class CommandIdempotencyService:
         safe_response_snapshot: dict,
         secret_delivery: SecretDeliveryMetadata | None = None,
     ) -> CompletedCommandReplay:
-        if reservation._owner_token is not self._owner_token:
-            raise ValueError("reservation is not owned by this transaction service")
+        outer_transaction = self._require_outer_transaction()
+        if (
+            reservation._session is not self.session
+            or reservation._outer_transaction is not outer_transaction
+            or not reservation._outer_transaction.is_active
+        ):
+            raise ValueError("reservation is not owned by this active outer transaction")
         if not 200 <= logical_http_status <= 599:
             raise ValueError("logical HTTP status must be between 200 and 599")
         snapshot = validate_safe_snapshot(safe_response_snapshot)
-        record = self.session.get(CommandIdempotencyRecord, reservation.record_id)
+        try:
+            record = self.session.get(CommandIdempotencyRecord, reservation.record_id)
+        except SQLAlchemyError as exc:
+            raise self._dependency_error() from exc
         if record is None or record.status != "Processing":
             raise ValueError("command reservation is not eligible for completion")
+        try:
+            with self.session.no_autoflush:
+                completed_at = self.session.scalar(select(func.now()))
+        except SQLAlchemyError as exc:
+            raise self._dependency_error() from exc
+        if (
+            completed_at is None
+            or getattr(completed_at, "tzinfo", None) is None
+            or completed_at.utcoffset() is None
+        ):
+            raise self._dependency_error()
         record.status = "Completed"
         record.logical_http_status = logical_http_status
         record.safe_response_snapshot = snapshot
-        record.completed_at = datetime.now(UTC)
+        record.completed_at = completed_at
         if secret_delivery is not None:
             record.callback_credential_id = secret_delivery.callback_credential_id
             record.callback_credential_version = secret_delivery.callback_credential_version
@@ -110,6 +129,16 @@ class CommandIdempotencyService:
         except SQLAlchemyError as exc:
             raise self._dependency_error() from exc
         return self._result(record, is_replay=False)
+
+    def _require_outer_transaction(self) -> SessionTransaction:
+        transaction = self.session.get_transaction()
+        if (
+            transaction is None
+            or not transaction.is_active
+            or transaction.origin is not SessionTransactionOrigin.BEGIN
+        ):
+            raise RuntimeError("an active explicit caller-owned outer transaction is required")
+        return transaction
 
     def _find(
         self, scope: CommandIdempotencyScope, key_digest: str, *, lock: bool = False

@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy.orm import Session, SessionTransaction
 
 ActorClass = Literal["HumanActor", "MachineService", "BackendService"]
 SAFE_IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9._:-]{0,99}$")
@@ -47,7 +48,8 @@ class NewCommandReservation:
     record_id: uuid.UUID
     command_id: uuid.UUID
     correlation_id: uuid.UUID
-    _owner_token: object = field(repr=False, compare=False)
+    _session: Session = field(repr=False, compare=False)
+    _outer_transaction: SessionTransaction = field(repr=False, compare=False)
 
 
 class SecretDeliveryMetadata(FrozenModel):

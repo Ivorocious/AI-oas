@@ -114,6 +114,29 @@ def test_safe_snapshot_accepts_result_and_safe_credential_identifiers() -> None:
     assert validate_safe_snapshot(snapshot) == snapshot
 
 
+def test_safe_tuple_is_normalized_to_json_list() -> None:
+    credential_id = str(uuid.uuid4())
+    normalized = validate_safe_snapshot(
+        {"items": ("one", {"callback_credential_id": credential_id}, (True, None))}
+    )
+    assert normalized == {"items": ["one", {"callback_credential_id": credential_id}, [True, None]]}
+    assert isinstance(normalized["items"], list)
+    assert isinstance(normalized["items"][2], list)
+
+
+@pytest.mark.parametrize("key", ["secret", "callback_credential_hash"])
+def test_tuple_cannot_bypass_forbidden_key_inspection(key) -> None:
+    with pytest.raises(ValueError):
+        validate_safe_snapshot({"items": ({key: "forbidden"},)})
+
+
+def test_deep_mixed_sequences_cannot_bypass_case_insensitive_inspection() -> None:
+    with pytest.raises(ValueError):
+        validate_safe_snapshot(
+            {"outer": ([{"safe": (({"CaLlBaCk_CrEdEnTiAl_HaSh": "forbidden"},),)}],)}
+        )
+
+
 def test_safe_snapshot_size_and_nonfinite_limits() -> None:
     with pytest.raises(ValueError):
         validate_safe_snapshot({"value": "x" * MAX_SAFE_SNAPSHOT_BYTES})

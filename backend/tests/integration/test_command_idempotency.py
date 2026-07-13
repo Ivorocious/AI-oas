@@ -328,6 +328,136 @@ def test_reserve_complete_replay_conflict_and_processing(engine: Engine) -> None
     assert captured.value.status_code == 500
 
 
+def test_reserve_requires_explicit_outer_transaction_before_database_work(
+    engine: Engine, monkeypatch
+) -> None:
+    factory = create_session_factory(engine)
+    with factory() as session:
+        service = CommandIdempotencyService(session)
+
+        def unexpected_lookup(*_args, **_kwargs):
+            raise AssertionError("database lookup must not run")
+
+        monkeypatch.setattr(service, "_find", unexpected_lookup)
+        with pytest.raises(RuntimeError):
+            service.reserve(scope(), "requires-transaction", HASH_A, uuid.uuid4())
+        assert session.get_transaction() is None
+
+        session.execute(select(1))
+        with pytest.raises(RuntimeError):
+            service.reserve(scope(), "rejects-autobegin", HASH_A, uuid.uuid4())
+        session.rollback()
+
+
+def test_reservation_is_bound_to_exact_session_and_outer_transaction(engine: Engine) -> None:
+    factory = create_session_factory(engine)
+    selected = scope()
+    session = factory()
+    try:
+        service = CommandIdempotencyService(session)
+        with session.begin():
+            creating_transaction = session.get_transaction()
+            reservation = service.reserve(selected, "transaction-bound", HASH_A, uuid.uuid4())
+            assert reservation._session is session
+            assert reservation._outer_transaction is creating_transaction
+            assert "Session" not in repr(reservation)
+            assert "Transaction" not in repr(reservation)
+            result = service.complete(reservation, 200, {"result": "same-transaction"})
+            assert result.command_id == reservation.command_id
+    finally:
+        session.close()
+
+
+def test_post_commit_reservation_cannot_be_completed_or_resumed(engine: Engine) -> None:
+    factory = create_session_factory(engine)
+    selected = scope()
+    raw_key = "committed-processing"
+    session = factory()
+    try:
+        service = CommandIdempotencyService(session)
+        with session.begin():
+            reservation = service.reserve(selected, raw_key, HASH_A, uuid.uuid4())
+
+        with pytest.raises(RuntimeError):
+            service.complete(reservation, 200, {"result": "too-late"})
+
+        with session.begin():
+            with pytest.raises(ValueError):
+                service.complete(reservation, 200, {"result": "later-transaction"})
+        with session.begin(), pytest.raises(IntakeError) as captured:
+            service.reserve(selected, raw_key, HASH_A, uuid.uuid4())
+        assert captured.value.status_code == 500
+    finally:
+        session.close()
+
+    table = Base.metadata.tables["command_idempotency_records"]
+    with engine.connect() as connection:
+        persisted = (
+            connection.execute(select(table).where(table.c.id == reservation.record_id))
+            .mappings()
+            .one()
+        )
+    assert persisted["status"] == "Processing"
+    assert persisted["completed_at"] is None
+
+
+def test_post_rollback_reservation_cannot_be_completed(engine: Engine) -> None:
+    factory = create_session_factory(engine)
+    selected = scope()
+    session = factory()
+    try:
+        service = CommandIdempotencyService(session)
+        transaction = session.begin()
+        reservation = service.reserve(selected, "rolled-back-reservation", HASH_A, uuid.uuid4())
+        transaction.rollback()
+
+        with pytest.raises(RuntimeError):
+            service.complete(reservation, 200, {"result": "too-late"})
+        with session.begin(), pytest.raises(ValueError):
+            service.complete(reservation, 200, {"result": "later-transaction"})
+    finally:
+        session.close()
+
+    with engine.connect() as connection:
+        assert (
+            connection.scalar(
+                select(func.count()).select_from(
+                    Base.metadata.tables["command_idempotency_records"]
+                )
+            )
+            == 0
+        )
+
+
+def test_different_session_cannot_complete_committed_processing(engine: Engine) -> None:
+    factory = create_session_factory(engine)
+    selected = scope()
+    first_session = factory()
+    second_session = factory()
+    try:
+        with first_session.begin():
+            reservation = CommandIdempotencyService(first_session).reserve(
+                selected, "cross-session-processing", HASH_A, uuid.uuid4()
+            )
+        with second_session.begin(), pytest.raises(ValueError):
+            CommandIdempotencyService(second_session).complete(
+                reservation, 200, {"result": "wrong-session"}
+            )
+    finally:
+        first_session.close()
+        second_session.close()
+
+    table = Base.metadata.tables["command_idempotency_records"]
+    with engine.connect() as connection:
+        row = (
+            connection.execute(select(table).where(table.c.id == reservation.record_id))
+            .mappings()
+            .one()
+        )
+    assert row["status"] == "Processing"
+    assert row["logical_http_status"] is None
+
+
 def test_atomic_success_failure_and_double_completion(engine: Engine) -> None:
     factory = create_session_factory(engine)
     selected = scope()
@@ -344,6 +474,16 @@ def test_atomic_success_failure_and_double_completion(engine: Engine) -> None:
         with pytest.raises(ValueError):
             service.complete(reservation, 200, {"contact_id": str(contact_id)})
     with engine.connect() as connection:
+        command_row = (
+            connection.execute(
+                select(Base.metadata.tables["command_idempotency_records"]).where(
+                    Base.metadata.tables["command_idempotency_records"].c.id
+                    == reservation.record_id
+                )
+            )
+            .mappings()
+            .one()
+        )
         assert (
             connection.scalar(
                 select(func.count()).select_from(
@@ -353,6 +493,9 @@ def test_atomic_success_failure_and_double_completion(engine: Engine) -> None:
             == 1
         )
         assert connection.scalar(select(Base.metadata.tables["contacts"].c.id)) == contact_id
+    assert command_row["created_at"].utcoffset() == timedelta(0)
+    assert command_row["completed_at"].utcoffset() == timedelta(0)
+    assert command_row["completed_at"] >= command_row["created_at"]
 
     rollback_scope = scope()
     rollback_contact = uuid.uuid4()
@@ -405,10 +548,10 @@ def test_database_lookup_and_completion_failures_are_safe_and_atomic(
                 )
             )
 
-            def fail_flush(*_args, **_kwargs):
-                raise SQLAlchemyError("hidden completion detail")
+            def fail_database_time(*_args, **_kwargs):
+                raise SQLAlchemyError("hidden database-time detail")
 
-            monkeypatch.setattr(session, "flush", fail_flush)
+            monkeypatch.setattr(session, "scalar", fail_database_time)
             service.complete(reservation, 200, {"contact_id": str(contact_id)})
     assert completion_failure.value.status_code == 503
     with engine.connect() as connection:
