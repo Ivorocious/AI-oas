@@ -8,6 +8,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 ha
 
 ## Completed work
 
+- Implemented and validated reusable attempt-scoped callback authentication: strict single-header extraction, caller-owned explicit-transaction enforcement, exact session/transaction-bound immutable context, locked attempt/operation/request/credential verification, assignment concealment, frozen adapter and ownership guards, PostgreSQL expiry, append-oriented credential history, and constant-time hash proof without a supplied-hash SQL predicate. Test-only HTTP composition confirms HMAC/nonce ordering; no production callback route or mutation was added.
 - Implemented and validated `POST /api/v1/integration-attempts/{attempt_id}/commands/start`: an HMAC-authenticated assigned WorkflowService resolves command idempotency before domain reads, locks the attempt/operation/request/callback context, validates owner input and expiry, moves only `Pending → Running` with PostgreSQL time, and commits one audit/outbox/idempotency result atomically. It returns no credential and invokes no provider.
 - Implemented and validated the first production WorkflowService business command, `POST /api/v1/service-requests/{request_id}/commands/start-ai-interpretation`. It authenticates HMAC and commits the nonce, resolves command idempotency before domain reads, locks and version-checks the `TriagePending` request, creates one AI logical operation and `Pending` attempt, persists only the one-time callback credential hash, increments the request version, and commits safe audit/outbox/idempotency evidence atomically before returning plaintext once. Exact replay returns `AlreadyIssued` without plaintext; no AI provider is invoked.
 - Implemented and validated the reusable non-intake command-idempotency foundation: migration `0007_command_idempotency_foundation`, trusted full-scope reservations, strict key digesting, canonical validated-body binding, savepoint race resolution, safe completion/replay/conflict behavior, and non-secret one-time-delivery receipt metadata. No production command was added.
@@ -41,7 +42,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 ha
 
 ## Active task
 
-None. Claim/start AI attempt is complete.
+None. Attempt-scoped callback authentication is complete.
 
 ## Blockers
 
@@ -104,7 +105,7 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Known limitations
 
-- The backend includes atomic intake, human authentication, protected request detail, sixteen-table persistence, WorkflowService HMAC/nonce authentication, command idempotency, Start AI Interpretation, and claim/start AI attempt. No provider invocation, callback route/authentication, retry runtime, n8n workflow, publisher, frontend, or deployment exists.
+- The backend includes atomic intake, human authentication, protected request detail, sixteen-table persistence, WorkflowService HMAC/nonce authentication, command idempotency, Start AI Interpretation, claim/start AI attempt, and reusable transaction-bound callback authentication. No production callback route, provider invocation, AI result processing, retry runtime, n8n workflow, publisher, frontend, or deployment exists.
 - Start AI generates one callback plaintext value in memory and issues it only after commit; only its SHA-256 hash and safe metadata are stored. No provider request/response body or real AI provider credential is created or stored.
 - The demonstration policies define triage thresholds, failure taxonomy, retry budgets and delays, stale assessment, and uncertain-outcome reconciliation, but none is implemented. Real-world calibration remains deferred.
 - No real email is sent; only a proposed mock adapter is approved for the MVP.
@@ -113,6 +114,6 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Next milestone
 
-**Phase 2 — Attempt-scoped callback authentication foundation.**
+**Phase 2 — AI success callback command.**
 
-Implement reusable verification of a WorkflowService HMAC request plus an opaque callback credential against one exact `Running` attempt, operation kind, service identity/environment, active state, expiry, and constant-time stored-hash comparison.
+Accept allowlisted structured AI result evidence for one exact authenticated `Running` attempt, consume its callback credential, mark the attempt and logical operation succeeded, create an immutable interpretation, update the request's current-interpretation reference/version, and commit safe audit/outbox/idempotency evidence atomically.

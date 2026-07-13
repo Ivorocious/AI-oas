@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the approved HTTP contracts for the MVP. Public intake, protected request detail, and Start AI Interpretation are implemented. The first production WorkflowService command uses HMAC, nonce persistence, command idempotency, expected request version, and an atomic attempt-creation transaction. Other catalog commands and every callback remain unimplemented.
+This document defines the approved HTTP contracts for the MVP. Public intake, protected request detail, Start AI Interpretation, and claim/start AI attempt are implemented. Both production WorkflowService commands use HMAC and nonce persistence; their mutations use command idempotency, expected versions, and atomic transactions. Reusable attempt-scoped callback authentication infrastructure exists, but every production callback route remains unimplemented.
 
 The proposed prefix is `/api/v1`. Commands may change canonical state; queries are read-only. FastAPI is the only authoritative command boundary. The frontend and n8n call these contracts and never write canonical database state directly.
 
@@ -181,7 +181,7 @@ Callbacks report evidence for backend-created attempts. They are commands, not d
 
 Callbacks reject fields that attempt to set service-request category, status, priority, queue, routing, approval, proposal state, retry eligibility, or arbitrary aggregate IDs. Credential replacement likewise cannot start/retry an attempt, invoke a provider, or change owner state/scope. An unknown or unauthorized attempt returns `404 ATTEMPT_NOT_FOUND` or `403 CALLBACK_FORBIDDEN`. A different result after terminalization returns `409 INTEGRATION_RESULT_CONFLICT`.
 
-The implemented claim/start request is `{ "schema_version": "1.0", "expected_versions": { "integration_attempt": 1 }, "command": {} }`. Its response contains current correlation, stable command ID, request/operation/attempt IDs, attempt number, `AIInterpretation`, `Running`, database start time, adapter name/version, and resulting attempt version. Callback and retry rows in this table remain unimplemented.
+The implemented claim/start request is `{ "schema_version": "1.0", "expected_versions": { "integration_attempt": 1 }, "command": {} }`. Its response contains current correlation, stable command ID, request/operation/attempt IDs, attempt number, `AIInterpretation`, `Running`, database start time, adapter name/version, and resulting attempt version. Reusable HMAC-plus-callback-credential verification exists for later callback commands, but no callback path, callback body, result processing, or retry command is implemented.
 
 ## Query catalog
 

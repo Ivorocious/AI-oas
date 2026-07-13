@@ -90,6 +90,12 @@ The first committed execution returns `202 Accepted`, a `Pending` attempt, and o
 
 The authenticated stable service ID and environment must exactly match the backend-created assignment. With the expected version and valid owner/callback context, the command moves only that attempt from `Pending` to `Running`, increments its version, and records PostgreSQL start time plus safe audit/outbox evidence. It returns no callback credential and invokes no provider. Exact replay returns the original safe `200 OK` result with the current correlation ID.
 
+## Attempt-scoped callback authentication
+
+WorkflowService HMAC authentication is necessary but insufficient for callbacks. The reusable callback verifier additionally requires exactly one `X-Attempt-Callback-Credential` proving authority over the exact assigned `Running` attempt. Only the SHA-256 hash is stored; candidate rows are loaded by attempt ID and compared in constant time without placing the supplied value or digest in SQL predicates.
+
+Verification runs inside an explicit caller-owned SQLAlchemy transaction. It locks and validates the attempt, frozen operation intent, owner request, credential history, assignment/environment, active highest credential version, and PostgreSQL-controlled expiry. The returned immutable safe context remains usable only in that same active session and transaction. No production callback endpoint exists and no result evidence is accepted or persisted.
+
 Public intake remains unauthenticated. `GET /api/v1/service-requests/{request_id}` requires a valid bearer token whose verified Supabase subject maps to an active local application actor with a current allowed role. The intake `Location` UUID alone grants no read access.
 
 Current-role resolution fails closed unless exactly one effective allowlisted assignment exists. PostgreSQL prevents multiple open-ended assignments, while overlapping finite historical intervals remain a future controlled role-management concern.
@@ -112,4 +118,4 @@ Machine secrets are resolved through an injected external resolver from stored n
 
 Reusable non-intake command idempotency accepts exactly one 8–128-character visible-ASCII `Idempotency-Key`. Raw keys are never stored; SHA-256 digests are scoped by trusted actor class/ID, command intent, backend route template, and target type/ID. The complete validated closed command model is canonically bound after validation. Exact completed replay returns the stored safe result without execution, while a changed body returns `409 COMMAND_IDEMPOTENCY_CONFLICT`. Secret-bearing records store only safe callback-credential metadata and `PlaintextIssued`; exact replay projects `AlreadyIssued` in memory and returns no plaintext.
 
-The public intake endpoint and protected request detail remain as documented. Start AI leaves its attempt `Pending`; claim/start moves it to `Running`. No callback endpoint, provider invocation, interpretation, credential replacement, n8n workflow, publisher, or frontend exists. `/health` remains database-, JWKS-, generator-, secret-resolver-, and attempt-command-independent.
+The public intake endpoint and protected request detail remain as documented. Start AI leaves its attempt `Pending`; claim/start moves it to `Running`. Attempt-scoped callback verification now exists as a reusable transaction-bound primitive, but no production callback endpoint, provider invocation, interpretation, credential replacement, n8n workflow, publisher, or frontend exists. `/health` remains database-, JWKS-, generator-, secret-resolver-, callback-verifier-, and attempt-command-independent.

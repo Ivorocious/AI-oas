@@ -908,3 +908,114 @@ def test_concurrent_same_key_different_body_is_one_success_one_conflict(
     assert conflict_response.json()["error"]["code"] == "COMMAND_IDEMPOTENCY_CONFLICT"
     assert transition_counts(database) == {"audit": 1, "outbox": 1, "command": 1}
     assert row(database, "integration_attempts", attempt_id)["version"] == 2
+
+
+def test_replaced_credential_history_permits_start_without_reading_hashes(
+    command_context,
+) -> None:
+    client, database, attempt_id, _ = create_pending_graph(command_context)
+    table = Base.metadata.tables["attempt_callback_credentials"]
+    statements: list[str] = []
+    with database.begin() as connection:
+        original = (
+            connection.execute(select(table).where(table.c.integration_attempt_id == attempt_id))
+            .mappings()
+            .one()
+        )
+        replacement_id = uuid.uuid4()
+        connection.execute(
+            update(table)
+            .where(table.c.id == original["id"])
+            .values(
+                state="Replaced",
+                replaced_at=original["issued_at"],
+                replacement_credential_id=replacement_id,
+            )
+        )
+        connection.execute(
+            insert(table).values(
+                id=replacement_id,
+                integration_attempt_id=attempt_id,
+                operation_kind="AIInterpretation",
+                workflow_service_identity=original["workflow_service_identity"],
+                workflow_environment=original["workflow_environment"],
+                credential_version=2,
+                credential_hash=hashlib.sha256(uuid.uuid4().bytes).hexdigest(),
+                state="Active",
+                expires_at=original["expires_at"],
+            )
+        )
+
+    def capture(_connection, _cursor, statement, _parameters, _context, _many):
+        statements.append(statement)
+
+    event.listen(database, "before_cursor_execute", capture)
+    try:
+        response = post_start(client, attempt_id, nonce="start-history-compatible-001")
+    finally:
+        event.remove(database, "before_cursor_execute", capture)
+    assert response.status_code == 200
+    assert row(database, "integration_attempts", attempt_id)["state"] == "Running"
+    credential_selects = [
+        statement
+        for statement in statements
+        if "attempt_callback_credentials" in statement.lower()
+        and statement.lstrip().lower().startswith("select")
+    ]
+    assert credential_selects
+    assert all("credential_hash" not in statement.lower() for statement in credential_selects)
+
+
+def test_active_callback_credential_not_highest_is_safe_internal_error(
+    command_context,
+) -> None:
+    client, database, attempt_id, _ = create_pending_graph(command_context)
+    table = Base.metadata.tables["attempt_callback_credentials"]
+    with database.begin() as connection:
+        original = (
+            connection.execute(select(table).where(table.c.integration_attempt_id == attempt_id))
+            .mappings()
+            .one()
+        )
+        connection.execute(
+            insert(table).values(
+                id=uuid.uuid4(),
+                integration_attempt_id=attempt_id,
+                operation_kind="AIInterpretation",
+                workflow_service_identity=original["workflow_service_identity"],
+                workflow_environment=original["workflow_environment"],
+                credential_version=2,
+                credential_hash=hashlib.sha256(uuid.uuid4().bytes).hexdigest(),
+                state="Revoked",
+                expires_at=original["expires_at"],
+                revoked_at=original["issued_at"],
+            )
+        )
+    response = post_start(client, attempt_id, nonce="start-active-not-current-0001")
+    assert response.status_code == 500
+    assert response.json()["error"]["code"] == "INTERNAL_ERROR"
+    assert row(database, "integration_attempts", attempt_id)["state"] == "Pending"
+    assert transition_counts(database) == {"audit": 0, "outbox": 0, "command": 0}
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("adapter_name", "MismatchedAdapter"), ("adapter_version", "999")],
+)
+def test_frozen_adapter_intent_mismatch_rolls_back_safely(command_context, field, value) -> None:
+    client, database, attempt_id, _ = create_pending_graph(command_context)
+    attempts = Base.metadata.tables["integration_attempts"]
+    with database.begin() as connection:
+        connection.execute(
+            update(attempts).where(attempts.c.id == attempt_id).values(**{field: value})
+        )
+    response = post_start(
+        client,
+        attempt_id,
+        nonce=f"start-adapter-{field}-000001",
+    )
+    assert response.status_code == 500
+    assert response.json()["error"]["code"] == "INTERNAL_ERROR"
+    assert value not in response.text
+    assert row(database, "integration_attempts", attempt_id)["state"] == "Pending"
+    assert transition_counts(database) == {"audit": 0, "outbox": 0, "command": 0}

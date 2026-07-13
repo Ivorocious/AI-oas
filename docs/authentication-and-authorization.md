@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document defines the fixed MVP identity, authentication, and authorization model. Human access and the reusable WorkflowService HMAC, nonce, and command-idempotency foundations protect Start AI Interpretation and claim/start AI attempt. The assigned WorkflowService may start only its exact `Pending` AI attempt under assignment, owner, callback-context, and expected-version guards. Callback credential proof, credential replacement, retry AI, result callbacks, EventPublisher execution, rotation, and hosted secret-manager integration remain unimplemented.
+This document defines the fixed MVP identity, authentication, and authorization model. Human access and the reusable WorkflowService HMAC, nonce, command-idempotency, and attempt-scoped callback-authentication foundations protect the implemented boundaries. The assigned WorkflowService may start only its exact `Pending` AI attempt, and later callback code can verify HMAC plus the current opaque credential for one exact assigned `Running` attempt inside the callback transaction. Credential replacement, retry AI, result callbacks, EventPublisher execution, rotation, and hosted secret-manager integration remain unimplemented.
 
 The MVP serves one demonstration organization. It uses fixed roles and a centralized permission map rather than editable policies or enterprise RBAC.
 
@@ -104,6 +104,8 @@ When the backend creates an `IntegrationAttempt`, it creates a high-entropy opaq
 The plaintext credential is returned once to the authorized workflow context in the first successful secret-bearing command response and is never emitted in integration events, audit metadata, provider payloads, Git, ordinary logs, or stored command responses. The backend stores only a cryptographic hash plus safe metadata such as attempt ID, expiry, issued/consumed timestamps, and credential version.
 
 Result callbacks require both valid HMAC headers and the opaque credential, proposed as `X-Attempt-Callback-Credential`. The backend verifies the credential in constant time against the stored hash and exact attempt scope. It cannot create or authorize another attempt, select lifecycle state, or authorize a different operation kind.
+
+The reusable verifier now implements this proof without exposing a production callback route. It locks the exact `Running` attempt, operation, owner request, sibling attempts, and all callback-credential rows in a caller-owned explicit transaction. It authorizes only the one Active highest-version credential matching the assigned stable WorkflowService identity/environment and PostgreSQL-controlled expiry. Valid Replaced, Revoked, and Consumed history is retained but cannot authorize; plaintext is never stored, returned in the safe context, or used in SQL lookup predicates. The immutable verified context is bound to the exact active session and outer transaction.
 
 After a terminal callback is accepted, the credential is consumed. A later request can receive the original idempotent callback result only when machine authentication is valid and the same callback credential hash, command idempotency key, route, and canonical body match the stored command result. A new key, different body/result, different attempt, expired credential, or replaced credential cannot use the consumed token.
 
@@ -281,4 +283,4 @@ Canonical audit and telemetry never store bearer tokens, passwords, HMAC secrets
 
 ## Deferred implementation decisions
 
-Human authentication and reusable WorkflowService HMAC, nonce, and command-idempotency infrastructure are implemented. Start AI Interpretation issues one created-attempt callback credential after commit, and the assigned WorkflowService can now claim/start that exact eligible attempt. Callback authentication, credential replacement, AI callbacks/retries, hosted secret-manager integration, rotation, EventPublisher execution, demo provisioning, and remaining protected boundaries remain deferred.
+Human authentication and reusable WorkflowService HMAC, nonce, command-idempotency, and attempt-scoped callback-authentication infrastructure are implemented. Start AI Interpretation issues one created-attempt callback credential after commit, and the assigned WorkflowService can claim/start that exact eligible attempt. No callback command consumes the verified authority yet; credential replacement, AI callbacks/retries, hosted secret-manager integration, rotation, EventPublisher execution, demo provisioning, and remaining protected boundaries remain deferred.

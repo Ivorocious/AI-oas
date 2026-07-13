@@ -190,6 +190,10 @@ class AttemptStartService:
             )
         if (
             attempt.operation_kind != "AIInterpretation"
+            or operation.operation_kind != "AIInterpretation"
+            or attempt.operation_kind != operation.operation_kind
+            or attempt.adapter_name != operation.adapter_name
+            or attempt.adapter_version != operation.adapter_version
             or attempt.started_at is not None
             or attempt.completed_at is not None
             or attempt.result_hash is not None
@@ -235,9 +239,56 @@ class AttemptStartService:
                 "The attempt owner is no longer eligible for this command.",
             )
 
-        if len(credential_rows) != 1:
+        active_credentials = [row for row in credential_rows if row.state == "Active"]
+        credential_versions = [row.credential_version for row in credential_rows]
+        if (
+            len(active_credentials) != 1
+            or any(version <= 0 for version in credential_versions)
+            or len(credential_versions) != len(set(credential_versions))
+        ):
             raise RuntimeError("attempt callback credential metadata is inconsistent")
-        credential = credential_rows[0]
+        credential = active_credentials[0]
+        if credential.credential_version != max(credential_versions):
+            raise RuntimeError("active attempt callback credential is not current")
+        credentials_by_id = {row.id: row for row in credential_rows}
+        for historical in credential_rows:
+            if historical.id == credential.id:
+                continue
+            replacement = credentials_by_id.get(historical.replacement_credential_id)
+            if historical.state == "Replaced":
+                valid_history = (
+                    historical.consumed_at is None
+                    and historical.replaced_at is not None
+                    and historical.revoked_at is None
+                    and historical.replacement_credential_id is not None
+                    and replacement is not None
+                    and replacement.credential_version == historical.credential_version + 1
+                )
+            elif historical.state == "Revoked":
+                valid_history = (
+                    historical.consumed_at is None
+                    and historical.replaced_at is None
+                    and historical.revoked_at is not None
+                    and historical.replacement_credential_id is None
+                )
+            elif historical.state == "Consumed":
+                valid_history = (
+                    historical.consumed_at is not None
+                    and historical.replaced_at is None
+                    and historical.revoked_at is None
+                    and historical.replacement_credential_id is None
+                )
+            else:
+                valid_history = False
+            if (
+                not valid_history
+                or historical.integration_attempt_id != attempt.id
+                or historical.operation_kind != "AIInterpretation"
+                or historical.workflow_service_identity != attempt.assigned_workflow_service
+                or historical.workflow_environment != attempt.workflow_environment
+                or historical.expires_at != attempt.callback_authorization_deadline
+            ):
+                raise RuntimeError("attempt callback credential history is inconsistent")
         if (
             credential.integration_attempt_id != attempt.id
             or credential.operation_kind != "AIInterpretation"
