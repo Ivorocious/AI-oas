@@ -110,6 +110,13 @@ Correlation = Annotated[uuid.UUID, Depends(resolve_request_correlation)]
 Service = Annotated[ProposalLifecycleService, Depends(get_proposal_service)]
 
 
+def require_proposal_json(request: Request) -> None:
+    validate_json_content_type(request)
+
+
+JsonRequest = Annotated[None, Depends(require_proposal_json)]
+
+
 @router.post(
     "/api/v1/service-requests/{request_id}/proposed-actions",
     operation_id="create_proposal_draft",
@@ -124,6 +131,7 @@ def create_proposal_draft(
     correlation_id: Correlation,
     actor: Human,
     service: Service,
+    _json_request: JsonRequest,
 ) -> JSONResponse:
     return _execute(
         request,
@@ -150,6 +158,7 @@ def edit_proposal_draft(
     correlation_id: Correlation,
     actor: Human,
     service: Service,
+    _json_request: JsonRequest,
 ) -> JSONResponse:
     return _execute(
         request, service, actor, correlation_id, _id(action_id), "EditProposalDraft", command
@@ -169,6 +178,7 @@ def submit_proposal(
     correlation_id: Correlation,
     actor: Human,
     service: Service,
+    _json_request: JsonRequest,
 ) -> JSONResponse:
     return _execute(
         request, service, actor, correlation_id, _id(action_id), "SubmitProposal", command
@@ -188,6 +198,7 @@ def approve_proposal(
     correlation_id: Correlation,
     actor: Human,
     service: Service,
+    _json_request: JsonRequest,
 ) -> JSONResponse:
     return _execute(
         request, service, actor, correlation_id, _id(action_id), "ApproveProposal", command
@@ -207,6 +218,7 @@ def reject_proposal(
     correlation_id: Correlation,
     actor: Human,
     service: Service,
+    _json_request: JsonRequest,
 ) -> JSONResponse:
     return _execute(
         request, service, actor, correlation_id, _id(action_id), "RejectProposal", command
@@ -227,6 +239,7 @@ def create_material_revision(
     correlation_id: Correlation,
     actor: Human,
     service: Service,
+    _json_request: JsonRequest,
 ) -> JSONResponse:
     return _execute(
         request,

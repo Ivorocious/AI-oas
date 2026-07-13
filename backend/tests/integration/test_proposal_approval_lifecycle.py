@@ -1,7 +1,9 @@
 """Checkpoint 3 proposal lifecycle on PostgreSQL."""
 
+import json
 import uuid
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -17,6 +19,7 @@ from ai_operations_automation.proposal.models import (
     DecideProposalRequest,
     EditDraftRequest,
     MaterialRevisionRequest,
+    RejectProposalRequest,
     SubmitProposalRequest,
 )
 from ai_operations_automation.proposal.service import ProposalLifecycleService
@@ -228,6 +231,20 @@ def test_create_edit_submit_approve_revision_preserves_operation_and_exclusions(
         "proposal-approve-001",
     )
     assert approved.safe_snapshot["result"]["service_request_status"] == "ActionPendingExecution"
+    decision_id = approved.safe_snapshot["result"]["approval_decision_id"]
+    approval_replay = execute(
+        service,
+        "ApproveProposal",
+        action_id,
+        DecideProposalRequest(
+            schema_version="1.0",
+            expected_versions={"service_request": 3, "proposed_action": 3},
+            expected_payload_digest=digest,
+        ),
+        approver,
+        "proposal-approve-001",
+    )
+    assert approval_replay.safe_snapshot["result"]["approval_decision_id"] == decision_id
     replacement = execute(
         service,
         "CreateMaterialRevision",
@@ -245,6 +262,14 @@ def test_create_edit_submit_approve_revision_preserves_operation_and_exclusions(
     assert replacement_result["logical_operation_id"] == operation_id
     assert replacement_result["proposal_series_id"] == result["proposal_series_id"]
     assert replacement_result["proposal_number"] == 2
+    assert replacement_result["source_proposed_action_id"] == str(action_id)
+    assert replacement_result["source_proposal_state"] == "Superseded"
+    assert (
+        replacement_result["replacement_proposed_action_id"]
+        == replacement_result["proposed_action_id"]
+    )
+    assert replacement_result["replacement_proposal_state"] == "Draft"
+    assert replacement_result["recovery_cleared"] is False
     replacement_id = uuid.UUID(replacement_result["proposed_action_id"])
     assert counts(
         engine,
@@ -261,6 +286,13 @@ def test_create_edit_submit_approve_revision_preserves_operation_and_exclusions(
         "attempt_callback_credentials": 0,
     }
     with engine.connect() as connection:
+        validity = connection.execute(
+            select(Base.metadata.tables["audit_events"].c.safe_metadata).where(
+                Base.metadata.tables["audit_events"].c.event_name
+                == "approval.execution_validity_lost"
+            )
+        ).scalar_one()
+        assert validity["approval_decision_id"] == decision_id
         assert (
             connection.scalar(
                 select(func.count())
@@ -272,3 +304,329 @@ def test_create_edit_submit_approve_revision_preserves_operation_and_exclusions(
             )
             == 0
         )
+
+
+def _create_and_submit(service, ids, creator, *, prefix: str):
+    created = execute(
+        service,
+        "CreateProposalDraft",
+        ids["request"],
+        CreateDraftRequest(
+            schema_version="1.0",
+            expected_versions={"service_request": 1},
+            proposal=proposal(f"{prefix} source"),
+        ),
+        creator,
+        f"{prefix}-create",
+    )
+    action_id = uuid.UUID(created.safe_snapshot["result"]["proposed_action_id"])
+    submitted = execute(
+        service,
+        "SubmitProposal",
+        action_id,
+        SubmitProposalRequest(
+            schema_version="1.0",
+            expected_versions={"service_request": 2, "proposed_action": 1},
+        ),
+        creator,
+        f"{prefix}-submit",
+    )
+    return action_id, submitted.safe_snapshot["result"]["payload_digest"]
+
+
+def test_rejected_revision_has_decision_identity_and_no_false_superseded_event(engine) -> None:
+    ids = seed(engine)
+    service = ProposalLifecycleService(create_session_factory(engine))
+    creator = actor(ids["creator"], "OperationsAgent")
+    rejecter = actor(ids["approver"], "Administrator")
+    action_id, digest = _create_and_submit(service, ids, creator, prefix="reject")
+    command_body = RejectProposalRequest(
+        schema_version="1.0",
+        expected_versions={"service_request": 3, "proposed_action": 2},
+        expected_payload_digest=digest,
+        rationale="The proposed response requires a material correction.",
+    )
+    rejected = execute(
+        service, "RejectProposal", action_id, command_body, rejecter, "reject-decision"
+    )
+    decision_id = rejected.safe_snapshot["result"]["approval_decision_id"]
+    replay = execute(
+        service, "RejectProposal", action_id, command_body, rejecter, "reject-decision"
+    )
+    assert replay.safe_snapshot["result"]["approval_decision_id"] == decision_id
+    revised = execute(
+        service,
+        "CreateMaterialRevision",
+        action_id,
+        MaterialRevisionRequest(
+            schema_version="1.0",
+            expected_versions={"service_request": 4, "proposed_action": 3},
+            proposal=proposal("Truthful rejected replacement"),
+        ),
+        creator,
+        "reject-revision",
+    )
+    assert revised.safe_snapshot["result"]["source_proposal_state"] == "Rejected"
+    tables = Base.metadata.tables
+    with engine.connect() as connection:
+        assert connection.scalar(
+            select(tables["approval_decisions"].c.id).where(
+                tables["approval_decisions"].c.id == uuid.UUID(decision_id)
+            )
+        ) == uuid.UUID(decision_id)
+        false_audits = connection.scalar(
+            select(func.count())
+            .select_from(tables["audit_events"])
+            .where(
+                tables["audit_events"].c.aggregate_id == action_id,
+                tables["audit_events"].c.event_name == "proposed_action.superseded",
+            )
+        )
+        false_outbox = connection.scalar(
+            select(func.count())
+            .select_from(tables["outbox_messages"])
+            .where(
+                tables["outbox_messages"].c.aggregate_id == action_id,
+                tables["outbox_messages"].c.event_type == "proposed_action.superseded",
+            )
+        )
+        assert false_audits == false_outbox == 0
+
+
+def test_pending_approval_with_existing_decision_fails_without_replacement(engine) -> None:
+    ids = seed(engine)
+    service = ProposalLifecycleService(create_session_factory(engine))
+    creator = actor(ids["creator"], "OperationsAgent")
+    action_id, digest = _create_and_submit(service, ids, creator, prefix="contradiction")
+    tables = Base.metadata.tables
+    with engine.begin() as connection:
+        connection.execute(
+            insert(tables["approval_decisions"]).values(
+                id=uuid.uuid4(),
+                proposed_action_id=action_id,
+                proposal_number=1,
+                payload_digest=digest,
+                decision="Approved",
+                approver_actor_id=ids["approver"],
+                role_at_decision="Administrator",
+                correlation_id=uuid.uuid4(),
+                command_id=uuid.uuid4(),
+            )
+        )
+    with engine.connect() as connection:
+        before = (
+            connection.scalar(select(func.count()).select_from(tables["proposed_actions"])),
+            connection.scalar(select(func.count()).select_from(tables["outbox_messages"])),
+        )
+    outcome = execute(
+        service,
+        "CreateMaterialRevision",
+        action_id,
+        MaterialRevisionRequest(
+            schema_version="1.0",
+            expected_versions={"service_request": 3, "proposed_action": 2},
+            proposal=proposal("Must not be created"),
+        ),
+        creator,
+        "contradictory-revision",
+    )
+    assert outcome.safe_snapshot["error"]["code"] == "PROPOSAL_APPROVAL_GRAPH_INCONSISTENT"
+    with engine.connect() as connection:
+        after = (
+            connection.scalar(select(func.count()).select_from(tables["proposed_actions"])),
+            connection.scalar(select(func.count()).select_from(tables["outbox_messages"])),
+        )
+    assert after == before
+
+
+def test_retryable_failure_revision_emits_prior_approval_identity_and_clears_recovery(
+    engine,
+) -> None:
+    ids = seed(engine)
+    service = ProposalLifecycleService(create_session_factory(engine))
+    creator = actor(ids["creator"], "OperationsAgent")
+    approver = actor(ids["approver"], "Administrator")
+    action_id, digest = _create_and_submit(service, ids, creator, prefix="retryable")
+    approved = execute(
+        service,
+        "ApproveProposal",
+        action_id,
+        DecideProposalRequest(
+            schema_version="1.0",
+            expected_versions={"service_request": 3, "proposed_action": 2},
+            expected_payload_digest=digest,
+        ),
+        approver,
+        "retryable-approve",
+    )
+    decision_id = approved.safe_snapshot["result"]["approval_decision_id"]
+    tables = Base.metadata.tables
+    operation_id, attempt_id = uuid.uuid4(), uuid.uuid4()
+    now = datetime.now(UTC)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(tables["logical_operations"]).values(
+                id=operation_id,
+                service_request_id=ids["request"],
+                operation_kind="AIInterpretation",
+                input_hash="d" * 64,
+                configuration_hash="e" * 64,
+                prompt_version="recovery-prompt",
+                result_schema_version="recovery-schema",
+                provider_name="test-provider",
+                model_name="test-model",
+                adapter_name="test-adapter",
+                adapter_version="1.0",
+                version=1,
+            )
+        )
+        connection.execute(
+            insert(tables["integration_attempts"]).values(
+                id=attempt_id,
+                logical_operation_id=operation_id,
+                service_request_id=ids["request"],
+                operation_kind="AIInterpretation",
+                attempt_number=1,
+                state="Pending",
+                version=1,
+                adapter_name="test-adapter",
+                adapter_version="1.0",
+                assigned_workflow_service="workflow-test",
+                workflow_environment="integration",
+                callback_authorization_deadline=now + timedelta(hours=1),
+            )
+        )
+        connection.execute(
+            tables["proposed_actions"]
+            .update()
+            .where(tables["proposed_actions"].c.id == action_id)
+            .values(state="RetryableExecutionFailure")
+        )
+        connection.execute(
+            tables["service_requests"]
+            .update()
+            .where(tables["service_requests"].c.id == ids["request"])
+            .values(
+                status="RetryableFailure",
+                current_queue="FailedRetryRequired",
+                recovery_target="ActionPendingExecution",
+                recovery_attempt_id=attempt_id,
+                failure_summary_code="OUTBOUND_RETRYABLE",
+            )
+        )
+    revised = execute(
+        service,
+        "CreateMaterialRevision",
+        action_id,
+        MaterialRevisionRequest(
+            schema_version="1.0",
+            expected_versions={"service_request": 4, "proposed_action": 3},
+            proposal=proposal("Retryable replacement"),
+        ),
+        creator,
+        "retryable-revision",
+    )
+    assert revised.safe_snapshot["result"]["recovery_cleared"] is True
+    with engine.connect() as connection:
+        evidence = connection.execute(
+            select(tables["audit_events"].c.safe_metadata).where(
+                tables["audit_events"].c.event_name == "approval.execution_validity_lost"
+            )
+        ).scalar_one()
+        assert evidence["approval_decision_id"] == decision_id
+        request_row = (
+            connection.execute(
+                select(tables["service_requests"]).where(
+                    tables["service_requests"].c.id == ids["request"]
+                )
+            )
+            .mappings()
+            .one()
+        )
+        assert request_row["recovery_target"] is None
+        assert request_row["recovery_attempt_id"] is None
+
+
+def test_evidence_and_command_snapshots_exclude_content_and_rationale(engine) -> None:
+    ids = seed(engine)
+    service = ProposalLifecycleService(create_session_factory(engine))
+    creator = actor(ids["creator"], "OperationsAgent")
+    rejecter = actor(ids["approver"], "Administrator")
+    sensitive_destination = "private-customer@example.test"
+    sensitive_content = "Sensitive proposal content must stay operational only."
+    sensitive_note = "Sensitive scheduling note must never enter evidence."
+    sensitive_rationale = "Sensitive rejection rationale must remain digest-only evidence."
+    payload = {
+        "action_type": "SchedulingInvitation",
+        "destination": {"kind": "Email", "value": sensitive_destination},
+        "content": sensitive_content,
+        "scheduling": {
+            "window_start": "2026-08-01T09:00:00+08:00",
+            "window_end": "2026-08-01T10:00:00+08:00",
+            "notes": sensitive_note,
+        },
+    }
+    created = execute(
+        service,
+        "CreateProposalDraft",
+        ids["request"],
+        CreateDraftRequest(
+            schema_version="1.0",
+            expected_versions={"service_request": 1},
+            proposal=payload,
+        ),
+        creator,
+        "safety-create",
+    )
+    action_id = uuid.UUID(created.safe_snapshot["result"]["proposed_action_id"])
+    submitted = execute(
+        service,
+        "SubmitProposal",
+        action_id,
+        SubmitProposalRequest(
+            schema_version="1.0",
+            expected_versions={"service_request": 2, "proposed_action": 1},
+        ),
+        creator,
+        "safety-submit",
+    )
+    execute(
+        service,
+        "RejectProposal",
+        action_id,
+        RejectProposalRequest(
+            schema_version="1.0",
+            expected_versions={"service_request": 3, "proposed_action": 2},
+            expected_payload_digest=submitted.safe_snapshot["result"]["payload_digest"],
+            rationale=sensitive_rationale,
+        ),
+        rejecter,
+        "safety-reject",
+    )
+    tables = Base.metadata.tables
+    with engine.connect() as connection:
+        serialized = json.dumps(
+            {
+                "audit": connection.execute(select(tables["audit_events"].c.safe_metadata))
+                .scalars()
+                .all(),
+                "outbox": connection.execute(select(tables["outbox_messages"].c.payload))
+                .scalars()
+                .all(),
+                "commands": connection.execute(
+                    select(tables["command_idempotency_records"].c.safe_response_snapshot)
+                )
+                .scalars()
+                .all(),
+            },
+            sort_keys=True,
+        )
+    for forbidden in (
+        sensitive_destination,
+        sensitive_content,
+        sensitive_note,
+        sensitive_rationale,
+        "Proposal fixture",
+        "A proposal-ready request.",
+    ):
+        assert forbidden not in serialized

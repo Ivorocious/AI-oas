@@ -238,7 +238,7 @@ class ProposalLifecycleService:
             proposal_series_id=series_id,
             version=1,
         )
-        payload = command.proposal.model_dump(mode="json")
+        payload = command.proposal.model_dump(mode="python")
         proposal = self._proposal_row(
             proposal_id, request.id, series_id, operation_id, 1, actor.actor_id, payload
         )
@@ -308,7 +308,7 @@ class ProposalLifecycleService:
                 "OUTBOUND_OPERATION_BLOCKED",
                 "The outbound operation has active or successful evidence.",
             )
-        payload = command.proposal.model_dump(mode="json")
+        payload = command.proposal.model_dump(mode="python")
         digest = proposal_payload_digest(payload)
         if digest == proposal.payload_digest:
             return self._complete(idem, reservation, 200, proposal, request)
@@ -606,7 +606,14 @@ class ProposalLifecycleService:
             else "service_request.action_revision_required",
             old_queue,
         )
-        return self._complete(idem, reservation, 200, proposal, request)
+        return self._complete(
+            idem,
+            reservation,
+            200,
+            proposal,
+            request,
+            extra_result={"approval_decision_id": str(decision.id)},
+        )
 
     def _revise(
         self,
@@ -658,6 +665,39 @@ class ProposalLifecycleService:
                 "INVALID_STATE_TRANSITION",
                 "The execution recovery target does not permit revision.",
             )
+        if source.state == "PendingApproval":
+            contradictory_decision = session.scalar(
+                select(ApprovalDecision.id).where(ApprovalDecision.proposed_action_id == source.id)
+            )
+            if source.current_approval_id is not None or contradictory_decision is not None:
+                return self._guard(
+                    idem,
+                    reservation,
+                    409,
+                    "PROPOSAL_APPROVAL_GRAPH_INCONSISTENT",
+                    "The proposal approval graph is inconsistent with its lifecycle state.",
+                )
+        prior_approval: ApprovalDecision | None = None
+        if source.state in {"Approved", "RetryableExecutionFailure"}:
+            prior_approval = session.scalar(
+                select(ApprovalDecision)
+                .where(
+                    ApprovalDecision.id == source.current_approval_id,
+                    ApprovalDecision.proposed_action_id == source.id,
+                    ApprovalDecision.proposal_number == source.proposal_number,
+                    ApprovalDecision.payload_digest == source.payload_digest,
+                    ApprovalDecision.decision == "Approved",
+                )
+                .with_for_update()
+            )
+            if prior_approval is None:
+                return self._guard(
+                    idem,
+                    reservation,
+                    409,
+                    "PROPOSAL_APPROVAL_GRAPH_INCONSISTENT",
+                    "The proposal approval graph is inconsistent with its lifecycle state.",
+                )
         if self._operation_blocked(session, source):
             return self._guard(
                 idem,
@@ -679,7 +719,7 @@ class ProposalLifecycleService:
                 "A replacement proposal already exists.",
             )
         now = session.scalar(select(func.now()))
-        payload = command.proposal.model_dump(mode="json")
+        payload = command.proposal.model_dump(mode="python")
         replacement = self._proposal_row(
             uuid.uuid4(),
             request.id,
@@ -733,26 +773,26 @@ class ProposalLifecycleService:
         old_queue = request.current_queue
         if original_state != "Draft":
             request.status, request.current_queue = "ActionRevisionRequired", "HumanReview"
-        if request.recovery_target is not None:
+        recovery_cleared = request.recovery_target is not None
+        if recovery_cleared:
             request.recovery_target = request.recovery_attempt_id = request.failure_summary_code = (
                 None
             )
         request.current_proposed_action_id = replacement.id
         request.version += 1
         session.flush()
-        self._evidence(
-            session,
-            source,
-            request,
-            reservation,
-            correlation_id,
-            actor,
-            "proposed_action.superseded"
-            if original_state != "Rejected"
-            else "proposed_action.revision_created",
-            "proposed_action.superseded",
-            "Revised",
-        )
+        if original_state != "Rejected":
+            self._evidence(
+                session,
+                source,
+                request,
+                reservation,
+                correlation_id,
+                actor,
+                "proposed_action.superseded",
+                "proposed_action.superseded",
+                "Revised",
+            )
         self._evidence(
             session,
             replacement,
@@ -764,10 +804,16 @@ class ProposalLifecycleService:
             "proposed_action.draft_created",
             "Draft",
         )
-        if original_state == "Approved":
+        if prior_approval is not None:
             validity = {
-                **self._safe_result(source, request),
+                "approval_decision_id": str(prior_approval.id),
+                "source_proposed_action_id": str(source.id),
+                "source_proposal_number": source.proposal_number,
+                "source_proposal_version": source.version,
                 "replacement_proposed_action_id": str(replacement.id),
+                "proposal_series_id": str(source.proposal_series_id),
+                "logical_operation_id": str(source.logical_operation_id),
+                "recovery_cleared": recovery_cleared,
             }
             write_audit_and_optional_outbox(
                 session,
@@ -797,7 +843,20 @@ class ProposalLifecycleService:
                 "service_request.action_revision_required",
                 old_queue,
             )
-        return self._complete(idem, reservation, 201, replacement, request)
+        return self._complete(
+            idem,
+            reservation,
+            201,
+            replacement,
+            request,
+            extra_result={
+                "source_proposed_action_id": str(source.id),
+                "source_proposal_state": source.state,
+                "replacement_proposed_action_id": str(replacement.id),
+                "replacement_proposal_state": replacement.state,
+                "recovery_cleared": recovery_cleared,
+            },
+        )
 
     @staticmethod
     def _proposal_row(
@@ -900,12 +959,16 @@ class ProposalLifecycleService:
         status: int,
         proposal: ProposedAction,
         request: ServiceRequest,
+        extra_result: dict[str, Any] | None = None,
     ) -> ProposalOutcome:
+        result = self._safe_result(proposal, request)
+        if extra_result is not None:
+            result.update(extra_result)
         completed = idem.complete(
             reservation,
             status,
             {
-                "result": self._safe_result(proposal, request),
+                "result": result,
                 "versions": {
                     "service_request": request.version,
                     "proposed_action": proposal.version,

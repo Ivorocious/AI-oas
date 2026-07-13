@@ -125,6 +125,8 @@ The catalog is deliberately smaller than the audit-event catalog. Multiple audit
 | `proposed_action.superseded` | `ProposedAction` | Old/replacement action IDs/versions, retained series/operation IDs, state |
 | `approval.approved` | `ProposedAction` | Approval ID, action ID/version/digest, approver actor ID, decision |
 | `approval.rejected` | `ProposedAction` | Approval ID, action ID/version/digest, approver actor ID, decision |
+
+A rejected proposal remains historical `Rejected` when a replacement is created and therefore emits no `proposed_action.superseded` audit or outbox event. Replacement/version creation provides the truthful evidence. Revision of `Approved` or approval-bearing `RetryableExecutionFailure` emits `approval.execution_validity_lost` with the exact prior approval-decision ID and source/replacement/series/operation identities, never operational content or rationale.
 | `approval.execution_validity_lost` | `ProposedAction` | Approval ID, old action ID/version, replacement action ID |
 | `integration_attempt.created` | `IntegrationAttempt` | Attempt ID/number, operation kind, owner IDs, logical operation ID, adapter/version, state; outbound adds exact proposal ID/version/digest, approval ID, and stable key reference |
 | `integration_attempt.started` | `IntegrationAttempt` | Attempt ID/number, logical operation ID, state |

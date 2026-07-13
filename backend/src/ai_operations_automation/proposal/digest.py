@@ -3,7 +3,7 @@
 import hashlib
 import json
 import math
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -27,7 +27,7 @@ def proposal_payload_digest(payload: dict[str, Any]) -> str:
         if isinstance(value, list):
             return [normalize(item) for item in value]
         if isinstance(value, datetime):
-            return value.isoformat()
+            return value.astimezone(UTC).isoformat()
         return value
 
     closed = normalize(closed)

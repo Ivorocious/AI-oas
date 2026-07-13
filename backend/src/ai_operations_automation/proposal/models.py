@@ -106,6 +106,37 @@ class ProposalResult(ClosedModel):
     payload_digest: Digest
     service_request_status: str
     service_request_queue: str | None
+    approval_decision_id: uuid.UUID | None = None
+    source_proposed_action_id: uuid.UUID | None = None
+    source_proposal_state: str | None = None
+    replacement_proposed_action_id: uuid.UUID | None = None
+    replacement_proposal_state: str | None = None
+    recovery_cleared: bool | None = None
+
+    @model_validator(mode="after")
+    def command_specific_identity_is_complete(self) -> "ProposalResult":
+        revision = (
+            self.source_proposed_action_id,
+            self.source_proposal_state,
+            self.replacement_proposed_action_id,
+            self.replacement_proposal_state,
+            self.recovery_cleared,
+        )
+        if any(value is not None for value in revision):
+            if any(value is None for value in revision):
+                raise ValueError("material-revision response metadata must be complete")
+            if (
+                self.replacement_proposed_action_id != self.proposed_action_id
+                or self.replacement_proposal_state != self.proposal_state
+                or self.replacement_proposal_state != "Draft"
+            ):
+                raise ValueError("material-revision response metadata is inconsistent")
+        if self.approval_decision_id is not None and self.proposal_state not in {
+            "Approved",
+            "Rejected",
+        }:
+            raise ValueError("approval decision identity is not valid for this result")
+        return self
 
 
 class ProposalVersions(ClosedModel):
