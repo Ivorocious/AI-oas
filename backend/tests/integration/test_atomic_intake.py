@@ -313,7 +313,7 @@ def test_second_migration_is_applied_and_deferrable(engine) -> None:
                 "AND condeferrable AND condeferred"
             )
         )
-    assert revision == "0007_command_idempotency_foundation"
+    assert revision == "0008_callback_command_authorization_binding"
     assert deferred == 2
 
 

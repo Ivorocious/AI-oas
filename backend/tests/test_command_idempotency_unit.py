@@ -5,6 +5,7 @@ import pytest
 from pydantic import BaseModel, ConfigDict, ValidationError
 from starlette.requests import Request
 
+from ai_operations_automation.command_idempotency import CallbackAuthorizationMetadata
 from ai_operations_automation.command_idempotency.canonicalization import (
     canonical_command_bytes,
     canonical_command_hash,
@@ -169,6 +170,43 @@ def test_scope_is_immutable() -> None:
     scope = valid_scope()
     with pytest.raises(ValidationError):
         scope.command_intent = "RetryAi"
+
+
+def test_callback_authorization_metadata_is_closed_immutable_and_positive() -> None:
+    credential_id = uuid.uuid4()
+    metadata = CallbackAuthorizationMetadata(
+        callback_credential_id=credential_id,
+        callback_credential_version=1,
+    )
+    assert metadata.callback_credential_id == credential_id
+    assert set(CallbackAuthorizationMetadata.model_fields) == {
+        "callback_credential_id",
+        "callback_credential_version",
+    }
+    assert all(
+        forbidden not in CallbackAuthorizationMetadata.model_fields
+        for forbidden in ("plaintext", "credential_hash", "expires_at", "nonce", "signature")
+    )
+    with pytest.raises(ValidationError):
+        metadata.callback_credential_version = 2
+    for values in (
+        {"callback_credential_version": 1},
+        {"callback_credential_id": credential_id},
+        {"callback_credential_id": credential_id, "callback_credential_version": 0},
+        {"callback_credential_id": credential_id, "callback_credential_version": -1},
+        {
+            "callback_credential_id": credential_id,
+            "callback_credential_version": 1,
+            "plaintext": "not-accepted",
+        },
+        {
+            "callback_credential_id": credential_id,
+            "callback_credential_version": 1,
+            "credential_hash": "0" * 64,
+        },
+    ):
+        with pytest.raises(ValidationError):
+            CallbackAuthorizationMetadata.model_validate(values)
 
 
 @pytest.mark.parametrize("actor_class", ["Customer", "WorkflowService", ""])

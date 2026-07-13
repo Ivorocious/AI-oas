@@ -379,6 +379,8 @@ Migration `0006_workflow_authentication_foundation` adds machine identities, ext
 
 Migration `0007_command_idempotency_foundation` adds the scoped non-intake command reservation, canonical-body binding, safe replay snapshot, and one-time secret-delivery receipt metadata. Domain-command integration and automated retention remain future work.
 
+Migration `0008_callback_command_authorization_binding` separates the callback credential used to authorize a command from the callback credential whose plaintext a secret-bearing command issued. Both IDs are restrictive foreign keys to existing callback credentials, but their metadata groups are independent: a normal callback result needs only authorization, Start AI needs only secret delivery, and a future credential-replacement command may need an old authorization credential plus a different newly delivered credential. The application-table count remains sixteen, and no callback command is implemented by this migration.
+
 1. Required extensions, fixed enums, domains, and foundational types.
 2. `application_actors`, role assignments, `machine_identities`, and credential metadata.
 3. Immutable `decision_policy_versions` and `failure_recovery_policy_versions`, intake reservation/delivery, contacts, and service-request aggregates, initially with deferred circular links.

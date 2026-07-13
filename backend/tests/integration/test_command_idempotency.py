@@ -7,11 +7,12 @@ from pathlib import Path
 import pytest
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, delete, func, insert, inspect, select, text
+from sqlalchemy import Engine, delete, func, insert, inspect, select, text, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from ai_operations_automation.app import create_app
 from ai_operations_automation.command_idempotency import (
+    CallbackAuthorizationMetadata,
     CommandIdempotencyScope,
     CommandIdempotencyService,
     CompletedCommandReplay,
@@ -111,12 +112,46 @@ def test_migration_inventory_downgrade_and_reupgrade(engine: Engine) -> None:
     assert len(Base.metadata.tables) == 16
     with engine.connect() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "0007_command_idempotency_foundation"
+            "0008_callback_command_authorization_binding"
         )
+    existing = completed_values()
     engine.dispose()
-    command.downgrade(alembic_config(), "0006_workflow_authentication_foundation")
-    assert "command_idempotency_records" not in inspect(engine).get_table_names()
+    command.downgrade(alembic_config(), "0007_command_idempotency_foundation")
+    columns_at_0007 = {
+        column["name"] for column in inspect(engine).get_columns("command_idempotency_records")
+    }
+    assert "callback_authorization_credential_id" not in columns_at_0007
+    assert "callback_authorization_credential_version" not in columns_at_0007
+    with engine.begin() as connection:
+        connection.execute(
+            insert(Base.metadata.tables["command_idempotency_records"]).values(**existing)
+        )
     command.upgrade(alembic_config(), "head")
+    with engine.connect() as connection:
+        preserved = (
+            connection.execute(
+                select(Base.metadata.tables["command_idempotency_records"]).where(
+                    Base.metadata.tables["command_idempotency_records"].c.id == existing["id"]
+                )
+            )
+            .mappings()
+            .one()
+        )
+    assert preserved["safe_response_snapshot"] == existing["safe_response_snapshot"]
+    assert preserved["callback_authorization_credential_id"] is None
+    assert preserved["callback_authorization_credential_version"] is None
+    engine.dispose()
+    command.downgrade(alembic_config(), "0007_command_idempotency_foundation")
+    assert "command_idempotency_records" in inspect(engine).get_table_names()
+    downgraded_columns = {
+        column["name"] for column in inspect(engine).get_columns("command_idempotency_records")
+    }
+    assert downgraded_columns == columns_at_0007
+    command.upgrade(alembic_config(), "head")
+    index_names = {
+        index["name"] for index in inspect(engine).get_indexes("command_idempotency_records")
+    }
+    assert "ix_command_idempotency_callback_authorization_credential" in index_names
 
 
 def test_valid_processing_nonsecret_completed_and_timestamps(engine: Engine) -> None:
@@ -257,6 +292,38 @@ def seed_callback_credential(engine: Engine) -> tuple[uuid.UUID, datetime]:
     return credential_id, expires_at
 
 
+def add_current_callback_credential(
+    engine: Engine, historical_credential_id: uuid.UUID
+) -> tuple[uuid.UUID, datetime]:
+    table = Base.metadata.tables["attempt_callback_credentials"]
+    current_id = uuid.uuid4()
+    with engine.begin() as connection:
+        historical = (
+            connection.execute(select(table).where(table.c.id == historical_credential_id))
+            .mappings()
+            .one()
+        )
+        connection.execute(
+            update(table)
+            .where(table.c.id == historical_credential_id)
+            .values(state="Revoked", revoked_at=datetime.now(UTC))
+        )
+        connection.execute(
+            insert(table).values(
+                id=current_id,
+                integration_attempt_id=historical["integration_attempt_id"],
+                operation_kind=historical["operation_kind"],
+                workflow_service_identity=historical["workflow_service_identity"],
+                workflow_environment=historical["workflow_environment"],
+                credential_version=2,
+                credential_hash="f" * 64,
+                state="Active",
+                expires_at=historical["expires_at"],
+            )
+        )
+    return current_id, historical["expires_at"]
+
+
 def test_secret_metadata_is_all_or_none_and_restricts_delete(engine: Engine) -> None:
     credential_id, expires_at = seed_callback_credential(engine)
     table = Base.metadata.tables["command_idempotency_records"]
@@ -293,6 +360,85 @@ def test_secret_metadata_is_all_or_none_and_restricts_delete(engine: Engine) -> 
                     Base.metadata.tables["attempt_callback_credentials"].c.id == credential_id
                 )
             )
+
+
+def test_callback_authorization_constraints_combinations_and_restrictive_fks(
+    engine: Engine,
+) -> None:
+    authorization_id, expires_at = seed_callback_credential(engine)
+    delivered_id, delivered_expires_at = add_current_callback_credential(engine, authorization_id)
+    table = Base.metadata.tables["command_idempotency_records"]
+
+    invalid = (
+        ({"callback_authorization_credential_id": authorization_id},),
+        ({"callback_authorization_credential_version": 1},),
+        (
+            {
+                "callback_authorization_credential_id": authorization_id,
+                "callback_authorization_credential_version": 0,
+            },
+        ),
+        (
+            {
+                "callback_authorization_credential_id": authorization_id,
+                "callback_authorization_credential_version": -1,
+            },
+        ),
+    )
+    for (changes,) in invalid:
+        assert assert_rejected(engine, completed_values(**changes)) == (
+            "ck_command_idem_callback_authorization_consistent"
+        )
+    assert (
+        assert_rejected(
+            engine,
+            processing_values(
+                callback_authorization_credential_id=authorization_id,
+                callback_authorization_credential_version=1,
+            ),
+        )
+        == "ck_command_idem_status_fields_consistent"
+    )
+
+    authorization_only = completed_values(
+        callback_authorization_credential_id=authorization_id,
+        callback_authorization_credential_version=1,
+    )
+    secret_only = completed_values(
+        callback_credential_id=delivered_id,
+        callback_credential_version=2,
+        callback_credential_expires_at=delivered_expires_at,
+        secret_delivery_receipt="PlaintextIssued",
+    )
+    both = completed_values(
+        callback_authorization_credential_id=authorization_id,
+        callback_authorization_credential_version=1,
+        callback_credential_id=delivered_id,
+        callback_credential_version=2,
+        callback_credential_expires_at=delivered_expires_at,
+        secret_delivery_receipt="PlaintextIssued",
+    )
+    with engine.begin() as connection:
+        connection.execute(insert(table).values(**authorization_only))
+        connection.execute(insert(table).values(**secret_only))
+        connection.execute(insert(table).values(**both))
+    with engine.connect() as connection:
+        stored_both = (
+            connection.execute(select(table).where(table.c.id == both["id"])).mappings().one()
+        )
+    assert stored_both["callback_authorization_credential_id"] == authorization_id
+    assert stored_both["callback_authorization_credential_version"] == 1
+    assert stored_both["callback_credential_id"] == delivered_id
+    assert stored_both["callback_credential_version"] == 2
+    assert expires_at == delivered_expires_at
+    for credential_id in (authorization_id, delivered_id):
+        with pytest.raises(SQLAlchemyError):
+            with engine.begin() as connection:
+                connection.execute(
+                    delete(Base.metadata.tables["attempt_callback_credentials"]).where(
+                        Base.metadata.tables["attempt_callback_credentials"].c.id == credential_id
+                    )
+                )
 
 
 def test_reserve_complete_replay_conflict_and_processing(engine: Engine) -> None:
@@ -726,3 +872,126 @@ def test_secret_completion_replay_is_safe_and_nonmutating(engine: Engine) -> Non
     assert "plaintext" not in str(replay).lower()
     assert credential_after == credential_before
     assert "plaintext" not in str(record["safe_response_snapshot"]).lower()
+
+
+def test_authorization_only_completion_and_replay_are_independent(engine: Engine) -> None:
+    credential_id, _ = seed_callback_credential(engine)
+    factory = create_session_factory(engine)
+    selected = scope(command_intent="RecordAiSuccess")
+    snapshot = {"result": "accepted-without-secret-delivery"}
+    with factory() as session, session.begin():
+        service = CommandIdempotencyService(session)
+        reservation = service.reserve(selected, "authorization-only", HASH_A, uuid.uuid4())
+        first = service.complete(
+            reservation,
+            200,
+            snapshot,
+            callback_authorization=CallbackAuthorizationMetadata(
+                callback_credential_id=credential_id,
+                callback_credential_version=1,
+            ),
+        )
+        assert first.callback_authorization_credential_id == credential_id
+        assert first.callback_authorization_credential_version == 1
+        assert first.credential_delivery is None
+        assert first.safe_response_snapshot == snapshot
+    with engine.connect() as connection:
+        row = (
+            connection.execute(
+                select(Base.metadata.tables["command_idempotency_records"]).where(
+                    Base.metadata.tables["command_idempotency_records"].c.id
+                    == reservation.record_id
+                )
+            )
+            .mappings()
+            .one()
+        )
+    assert row["callback_authorization_credential_id"] == credential_id
+    assert row["callback_authorization_credential_version"] == 1
+    assert row["callback_credential_id"] is None
+    assert row["callback_credential_version"] is None
+    assert row["callback_credential_expires_at"] is None
+    assert row["secret_delivery_receipt"] is None
+    assert row["safe_response_snapshot"] == snapshot
+    with factory() as session, session.begin():
+        replay = CommandIdempotencyService(session).reserve(
+            selected, "authorization-only", HASH_A, uuid.uuid4()
+        )
+    assert replay.callback_authorization_credential_id == credential_id
+    assert replay.callback_authorization_credential_version == 1
+    assert replay.credential_delivery is None
+    assert replay.safe_response_snapshot == snapshot
+
+
+def test_both_metadata_groups_complete_replay_and_rollback_independently(
+    engine: Engine,
+) -> None:
+    authorization_id, _ = seed_callback_credential(engine)
+    delivered_id, delivered_expires_at = add_current_callback_credential(engine, authorization_id)
+    factory = create_session_factory(engine)
+    selected = scope(command_intent="ReplaceCallbackCredential")
+    with factory() as session, session.begin():
+        service = CommandIdempotencyService(session)
+        reservation = service.reserve(selected, "both-groups", HASH_A, uuid.uuid4())
+        first = service.complete(
+            reservation,
+            200,
+            {"result": "replacement-authorized"},
+            secret_delivery=SecretDeliveryMetadata(
+                callback_credential_id=delivered_id,
+                callback_credential_version=2,
+                callback_credential_expires_at=delivered_expires_at,
+            ),
+            callback_authorization=CallbackAuthorizationMetadata(
+                callback_credential_id=authorization_id,
+                callback_credential_version=1,
+            ),
+        )
+    assert first.callback_authorization_credential_id == authorization_id
+    assert first.callback_authorization_credential_version == 1
+    assert first.callback_credential_id == delivered_id
+    assert first.callback_credential_version == 2
+    assert first.credential_delivery is None
+    with factory() as session, session.begin():
+        replay = CommandIdempotencyService(session).reserve(
+            selected, "both-groups", HASH_A, uuid.uuid4()
+        )
+    assert replay.callback_authorization_credential_id == authorization_id
+    assert replay.callback_authorization_credential_version == 1
+    assert replay.callback_credential_id == delivered_id
+    assert replay.callback_credential_version == 2
+    assert replay.credential_delivery == "AlreadyIssued"
+    assert replay.safe_response_snapshot == {"result": "replacement-authorized"}
+
+    rollback_scope = scope(command_intent="RollbackCallbackResult")
+    with pytest.raises(RuntimeError):
+        with factory() as session, session.begin():
+            service = CommandIdempotencyService(session)
+            rollback = service.reserve(rollback_scope, "both-groups-rollback", HASH_A, uuid.uuid4())
+            service.complete(
+                rollback,
+                200,
+                {"result": "must-rollback"},
+                secret_delivery=SecretDeliveryMetadata(
+                    callback_credential_id=delivered_id,
+                    callback_credential_version=2,
+                    callback_credential_expires_at=delivered_expires_at,
+                ),
+                callback_authorization=CallbackAuthorizationMetadata(
+                    callback_credential_id=authorization_id,
+                    callback_credential_version=1,
+                ),
+            )
+            raise RuntimeError("forced caller rollback")
+    with engine.connect() as connection:
+        assert (
+            connection.scalar(
+                select(func.count())
+                .select_from(Base.metadata.tables["command_idempotency_records"])
+                .where(
+                    Base.metadata.tables["command_idempotency_records"].c.command_intent
+                    == "RollbackCallbackResult"
+                )
+            )
+            == 0
+        )

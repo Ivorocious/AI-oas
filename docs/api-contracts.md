@@ -183,6 +183,8 @@ Callbacks reject fields that attempt to set service-request category, status, pr
 
 The implemented claim/start request is `{ "schema_version": "1.0", "expected_versions": { "integration_attempt": 1 }, "command": {} }`. Its response contains current correlation, stable command ID, request/operation/attempt IDs, attempt number, `AIInterpretation`, `Running`, database start time, adapter name/version, and resulting attempt version. Reusable HMAC-plus-callback-credential verification exists for later callback commands, but no callback path, callback body, result processing, or retry command is implemented.
 
+Command idempotency can structurally retain the exact callback credential used to authorize a future callback command without claiming that callback plaintext was issued. This internal authorization binding is independent of the existing one-time secret-delivery receipt and is not added automatically to response snapshots. Every production callback route remains unimplemented.
+
 ## Query catalog
 
 Queries never change state and do not require expected versions or idempotency keys. Authorization and field-level redaction still apply.

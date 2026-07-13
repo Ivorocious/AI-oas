@@ -8,6 +8,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 ha
 
 ## Completed work
 
+- Implemented and validated migration `0008_callback_command_authorization_binding`, separating the exact callback credential used to authorize a command from one-time callback plaintext delivery metadata. Command completion/replay supports authorization-only, delivery-only, neither, or both independently with restrictive foreign keys, positive-version constraints, Processing-state exclusion, rollback safety, and no response-snapshot inference. No callback route or result processing was added.
 - Implemented and validated reusable attempt-scoped callback authentication: strict single-header extraction, caller-owned explicit-transaction enforcement, exact session/transaction-bound immutable context, locked attempt/operation/request/credential verification, assignment concealment, frozen adapter and ownership guards, PostgreSQL expiry, append-oriented credential history, and constant-time hash proof without a supplied-hash SQL predicate. Test-only HTTP composition confirms HMAC/nonce ordering; no production callback route or mutation was added.
 - Implemented and validated `POST /api/v1/integration-attempts/{attempt_id}/commands/start`: an HMAC-authenticated assigned WorkflowService resolves command idempotency before domain reads, locks the attempt/operation/request/callback context, validates owner input and expiry, moves only `Pending → Running` with PostgreSQL time, and commits one audit/outbox/idempotency result atomically. It returns no credential and invokes no provider.
 - Implemented and validated the first production WorkflowService business command, `POST /api/v1/service-requests/{request_id}/commands/start-ai-interpretation`. It authenticates HMAC and commits the nonce, resolves command idempotency before domain reads, locks and version-checks the `TriagePending` request, creates one AI logical operation and `Pending` attempt, persists only the one-time callback credential hash, increments the request version, and commits safe audit/outbox/idempotency evidence atomically before returning plaintext once. Exact replay returns `AlreadyIssued` without plaintext; no AI provider is invoked.
@@ -42,7 +43,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 ha
 
 ## Active task
 
-None. Attempt-scoped callback authentication is complete.
+None. Callback-command authorization binding is complete.
 
 ## Blockers
 
@@ -116,4 +117,4 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 **Phase 2 — AI success callback command.**
 
-Accept allowlisted structured AI result evidence for one exact authenticated `Running` attempt, consume its callback credential, mark the attempt and logical operation succeeded, create an immutable interpretation, update the request's current-interpretation reference/version, and commit safe audit/outbox/idempotency evidence atomically.
+Use WorkflowService HMAC plus exact callback-credential proof and callback command idempotency with the durable authorization binding to support exact replay after credential consumption. Accept structured allowlisted AI result evidence, mark the attempt and operation succeeded, create an immutable interpretation, update the request's current-interpretation reference/version, and atomically persist credential consumption, audit, outbox, and the safe response.

@@ -10,6 +10,7 @@ from ai_operations_automation.command_idempotency.keys import (
     validate_command_idempotency_key,
 )
 from ai_operations_automation.command_idempotency.models import (
+    CallbackAuthorizationMetadata,
     CommandIdempotencyScope,
     CompletedCommandReplay,
     NewCommandReservation,
@@ -18,6 +19,7 @@ from ai_operations_automation.command_idempotency.models import (
 from ai_operations_automation.command_idempotency.service import CommandIdempotencyService
 
 __all__ = [
+    "CallbackAuthorizationMetadata",
     "CommandIdempotencyScope",
     "CommandIdempotencyService",
     "CompletedCommandReplay",

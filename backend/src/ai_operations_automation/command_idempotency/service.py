@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, SessionTransaction, SessionTransactionOrigin
 
 from ai_operations_automation.command_idempotency.keys import command_key_digest
 from ai_operations_automation.command_idempotency.models import (
+    CallbackAuthorizationMetadata,
     CommandIdempotencyScope,
     CompletedCommandReplay,
     NewCommandReservation,
@@ -87,6 +88,7 @@ class CommandIdempotencyService:
         logical_http_status: int,
         safe_response_snapshot: dict,
         secret_delivery: SecretDeliveryMetadata | None = None,
+        callback_authorization: CallbackAuthorizationMetadata | None = None,
     ) -> CompletedCommandReplay:
         outer_transaction = self._require_outer_transaction()
         if (
@@ -124,6 +126,13 @@ class CommandIdempotencyService:
             record.callback_credential_version = secret_delivery.callback_credential_version
             record.callback_credential_expires_at = secret_delivery.callback_credential_expires_at
             record.secret_delivery_receipt = "PlaintextIssued"
+        if callback_authorization is not None:
+            record.callback_authorization_credential_id = (
+                callback_authorization.callback_credential_id
+            )
+            record.callback_authorization_credential_version = (
+                callback_authorization.callback_credential_version
+            )
         try:
             self.session.flush()
         except SQLAlchemyError as exc:
@@ -181,6 +190,10 @@ class CommandIdempotencyService:
             callback_credential_id=record.callback_credential_id,
             callback_credential_version=record.callback_credential_version,
             callback_credential_expires_at=record.callback_credential_expires_at,
+            callback_authorization_credential_id=(record.callback_authorization_credential_id),
+            callback_authorization_credential_version=(
+                record.callback_authorization_credential_version
+            ),
             credential_delivery=(
                 "AlreadyIssued"
                 if is_replay and record.secret_delivery_receipt == "PlaintextIssued"

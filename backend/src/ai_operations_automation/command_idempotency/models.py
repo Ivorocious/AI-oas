@@ -58,6 +58,11 @@ class SecretDeliveryMetadata(FrozenModel):
     callback_credential_expires_at: AwareDatetime
 
 
+class CallbackAuthorizationMetadata(FrozenModel):
+    callback_credential_id: uuid.UUID
+    callback_credential_version: int = Field(gt=0)
+
+
 class CompletedCommandReplay(FrozenModel):
     record_id: uuid.UUID
     command_id: uuid.UUID
@@ -68,4 +73,6 @@ class CompletedCommandReplay(FrozenModel):
     callback_credential_id: uuid.UUID | None = None
     callback_credential_version: int | None = None
     callback_credential_expires_at: datetime | None = None
+    callback_authorization_credential_id: uuid.UUID | None = None
+    callback_authorization_credential_version: int | None = None
     credential_delivery: Literal["AlreadyIssued"] | None = None

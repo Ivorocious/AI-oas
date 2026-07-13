@@ -198,7 +198,7 @@ def test_upgrade_after_downgrade_succeeds(migrated_engine: Engine) -> None:
 
     with migrated_engine.connect() as database_connection:
         revision = database_connection.scalar(text("SELECT version_num FROM alembic_version"))
-    assert revision == "0007_command_idempotency_foundation"
+    assert revision == "0008_callback_command_authorization_binding"
 
 
 def test_duplicate_accepted_reservation_is_rejected(connection: Connection) -> None:

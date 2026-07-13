@@ -30,7 +30,7 @@ from alembic import command
 
 pytestmark = pytest.mark.integration
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
-NOW = datetime(2026, 7, 13, 12, 0, tzinfo=UTC)
+NOW = datetime.now(UTC)
 SECRET = b"synthetic-command-http-secret"
 
 

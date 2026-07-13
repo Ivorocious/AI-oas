@@ -69,7 +69,9 @@ class CommandIdempotencyRecord(Base):
             "(status = 'Processing' AND logical_http_status IS NULL "
             "AND safe_response_snapshot IS NULL AND completed_at IS NULL "
             "AND callback_credential_id IS NULL AND callback_credential_version IS NULL "
-            "AND callback_credential_expires_at IS NULL AND secret_delivery_receipt IS NULL) OR "
+            "AND callback_credential_expires_at IS NULL AND secret_delivery_receipt IS NULL "
+            "AND callback_authorization_credential_id IS NULL "
+            "AND callback_authorization_credential_version IS NULL) OR "
             "(status = 'Completed' AND logical_http_status IS NOT NULL "
             "AND logical_http_status BETWEEN 200 AND 599 "
             "AND safe_response_snapshot IS NOT NULL "
@@ -85,6 +87,14 @@ class CommandIdempotencyRecord(Base):
             "AND secret_delivery_receipt = 'PlaintextIssued')",
             name=conv("ck_command_idem_secret_delivery_consistent"),
         ),
+        CheckConstraint(
+            "(callback_authorization_credential_id IS NULL "
+            "AND callback_authorization_credential_version IS NULL) OR "
+            "(callback_authorization_credential_id IS NOT NULL "
+            "AND callback_authorization_credential_version IS NOT NULL "
+            "AND callback_authorization_credential_version > 0)",
+            name=conv("ck_command_idem_callback_authorization_consistent"),
+        ),
         Index(
             "ix_command_idempotency_target_created",
             "target_type",
@@ -92,6 +102,10 @@ class CommandIdempotencyRecord(Base):
             "created_at",
         ),
         Index("ix_command_idempotency_created_at", "created_at"),
+        Index(
+            "ix_command_idempotency_callback_authorization_credential",
+            "callback_authorization_credential_id",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -120,6 +134,15 @@ class CommandIdempotencyRecord(Base):
     callback_credential_version: Mapped[int | None] = mapped_column(Integer)
     callback_credential_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     secret_delivery_receipt: Mapped[str | None] = mapped_column(String(32))
+    callback_authorization_credential_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "attempt_callback_credentials.id",
+            name="fk_command_idempotency_callback_authorization_credential",
+            ondelete="RESTRICT",
+        ),
+    )
+    callback_authorization_credential_version: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
