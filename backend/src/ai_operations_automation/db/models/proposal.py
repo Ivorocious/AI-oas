@@ -42,6 +42,14 @@ class ProposedAction(Base):
         UniqueConstraint(
             "id", "proposal_number", "payload_digest", name="uq_proposed_actions_decision_identity"
         ),
+        UniqueConstraint(
+            "id",
+            "service_request_id",
+            "proposal_series_id",
+            "proposal_number",
+            "payload_digest",
+            name="uq_proposed_actions_execution_identity",
+        ),
         ForeignKeyConstraint(
             ("logical_operation_id", "service_request_id", "proposal_series_id"),
             (
@@ -260,6 +268,13 @@ class ApprovalDecision(Base):
     __table_args__ = (
         UniqueConstraint("proposed_action_id", name="uq_approval_decisions_proposed_action"),
         UniqueConstraint("id", "proposed_action_id", name="uq_approval_decisions_action_identity"),
+        UniqueConstraint(
+            "id",
+            "proposed_action_id",
+            "proposal_number",
+            "payload_digest",
+            name="uq_approval_decisions_execution_identity",
+        ),
         ForeignKeyConstraint(
             ("proposed_action_id", "proposal_number", "payload_digest"),
             (

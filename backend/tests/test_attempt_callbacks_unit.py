@@ -35,10 +35,6 @@ def success_payload() -> dict:
         "expected_versions": {"integration_attempt": 2},
         "evidence": {
             "result_schema_version": "1.0",
-            "prompt_version": "service-request-v1",
-            "provider_name": "ExampleAI",
-            "model_name": "example-model",
-            "adapter_name": "WorkflowServiceAIAdapter",
             "adapter_version": "1.0",
             "safe_provider_correlation": "provider-request-123",
             "latency_ms": 750,

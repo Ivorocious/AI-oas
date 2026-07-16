@@ -116,7 +116,7 @@ def test_migration_inventory_downgrade_and_reupgrade(engine: Engine) -> None:
     assert len(Base.metadata.tables) == 26
     with engine.connect() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "0011_proposal_approval_foundation"
+            "0012_mock_outbound_execution_foundation"
         )
     existing = completed_values()
     engine.dispose()

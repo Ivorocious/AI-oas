@@ -297,22 +297,8 @@ class AiAttemptCallbackService:
                 "INVALID_STATE_TRANSITION",
                 "The callback is not valid for the current attempt state.",
             )
-        frozen_identity = (
-            operation.result_schema_version,
-            operation.prompt_version,
-            operation.provider_name,
-            operation.model_name,
-            operation.adapter_name,
-            operation.adapter_version,
-        )
-        supplied_identity = (
-            evidence.result_schema_version,
-            evidence.prompt_version,
-            evidence.provider_name,
-            evidence.model_name,
-            evidence.adapter_name,
-            evidence.adapter_version,
-        )
+        frozen_identity = (operation.result_schema_version, attempt.adapter_version)
+        supplied_identity = (evidence.result_schema_version, evidence.adapter_version)
         if supplied_identity != frozen_identity:
             return self._guard(
                 authorized,

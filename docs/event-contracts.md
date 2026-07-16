@@ -1,6 +1,6 @@
 # Proposed Event and n8n Contracts
 
-> Implementation status: Checkpoint 3 emits allowlisted, PII-minimized proposal/approval outbox events transactionally with separate canonical audit records. Destination, content, scheduling notes, and raw rejection rationale are never copied into either evidence channel.
+> Implementation status: Checkpoint 4 adds transactional, allowlisted mock outbound lifecycle audit/outbox evidence, including queue-change events only when the queue changes. Reconciliation start and callback-credential replacement remain audit-only. Destination, proposal content, customer data, callback secrets, and raw stable keys never enter either evidence channel; no EventPublisher or n8n workflow is implemented.
 
 ## Status and scope
 

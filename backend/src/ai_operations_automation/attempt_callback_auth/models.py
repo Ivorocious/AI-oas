@@ -17,7 +17,7 @@ class VerifiedAttemptCallbackContext:
     integration_attempt_version: int
     logical_operation_id: uuid.UUID
     service_request_id: uuid.UUID
-    operation_kind: Literal["AIInterpretation"]
+    operation_kind: Literal["AIInterpretation", "OutboundAction"]
     callback_credential_id: uuid.UUID
     callback_credential_version: int
     callback_credential_expires_at: datetime

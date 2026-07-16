@@ -19,6 +19,7 @@ class ClosedModel(BaseModel):
 
 class MarkTerminalFailureExpectedVersions(ClosedModel):
     service_request: StrictInt = Field(gt=0)
+    proposed_action: StrictInt | None = Field(default=None, gt=0)
 
 
 class MarkTerminalFailureCommand(ClosedModel):
@@ -43,10 +44,13 @@ class MarkTerminalFailureResult(ClosedModel):
         "ADMINISTRATOR_TERMINAL_DISPOSITION",
     ]
     terminal_at: AwareDatetime
+    proposed_action_id: uuid.UUID | None = None
+    proposal_state: Literal["TerminalExecutionFailure"] | None = None
 
 
 class MarkTerminalFailureVersions(ClosedModel):
     service_request: StrictInt = Field(gt=0)
+    proposed_action: StrictInt | None = Field(default=None, gt=0)
 
 
 class MarkTerminalFailureResponse(ClosedModel):

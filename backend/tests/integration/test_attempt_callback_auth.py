@@ -585,4 +585,4 @@ def test_test_only_http_ordering_nonce_and_success(callback_context) -> None:
         )
     production_paths = create_app(Settings(_env_file=None), factory).openapi()["paths"]
     assert not any(path.startswith("/test/") for path in production_paths)
-    assert len(production_paths) == 19
+    assert len(production_paths) == 21

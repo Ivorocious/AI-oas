@@ -22,8 +22,13 @@ from ai_operations_automation.db.models.ai_execution import (
 )
 from ai_operations_automation.db.models.evidence import AuditEvent, OutboxMessage
 from ai_operations_automation.db.models.intake import ServiceRequest
+from ai_operations_automation.db.models.proposal import ApprovalDecision, ProposedAction
 from ai_operations_automation.intake.errors import IntakeError
 from ai_operations_automation.machine_auth.models import AuthenticatedWorkflowService
+from ai_operations_automation.outbound_identity import (
+    outbound_binding_matches,
+    outbound_key_reference,
+)
 from ai_operations_automation.start_ai.hashing import ai_input_hash
 
 ROUTE_TEMPLATE = "/api/v1/integration-attempts/{attempt_id}/commands/start"
@@ -152,6 +157,19 @@ class AttemptStartService:
         )
         if service_request is None:
             raise RuntimeError("attempt has no owning service request")
+        proposal = None
+        approval = None
+        if attempt.operation_kind == "OutboundAction":
+            proposal = session.scalar(
+                select(ProposedAction)
+                .where(ProposedAction.id == attempt.proposed_action_id)
+                .with_for_update()
+            )
+            approval = session.scalar(
+                select(ApprovalDecision)
+                .where(ApprovalDecision.id == attempt.approval_decision_id)
+                .with_for_update()
+            )
         siblings = session.scalars(
             select(IntegrationAttempt)
             .where(IntegrationAttempt.logical_operation_id == operation.id)
@@ -189,11 +207,8 @@ class AttemptStartService:
                 "The command is not valid for the current attempt state.",
             )
         if (
-            attempt.operation_kind != "AIInterpretation"
-            or operation.operation_kind != "AIInterpretation"
+            attempt.operation_kind not in ("AIInterpretation", "OutboundAction")
             or attempt.operation_kind != operation.operation_kind
-            or attempt.adapter_name != operation.adapter_name
-            or attempt.adapter_version != operation.adapter_version
             or attempt.started_at is not None
             or attempt.completed_at is not None
             or attempt.result_hash is not None
@@ -227,10 +242,45 @@ class AttemptStartService:
             )
         if succeeded:
             raise RuntimeError("successful sibling lacks a valid operation success reference")
-        if (
-            service_request.status != "TriagePending"
-            or ai_input_hash(service_request) != operation.input_hash
-        ):
+        if attempt.operation_kind == "AIInterpretation":
+            if (
+                attempt.adapter_name != operation.adapter_name
+                or attempt.adapter_version != operation.adapter_version
+            ):
+                raise RuntimeError("attempt does not match frozen operation intent")
+            owner_eligible = (
+                service_request.status == "TriagePending"
+                and ai_input_hash(service_request) == operation.input_hash
+            )
+        else:
+            owner_eligible = (
+                proposal is not None
+                and approval is not None
+                and service_request.status == "ActionPendingExecution"
+                and service_request.current_proposed_action_id == proposal.id
+                and proposal.state == "PendingExecution"
+                and proposal.service_request_id == service_request.id
+                and proposal.logical_operation_id == operation.id
+                and proposal.proposal_series_id == operation.proposal_series_id
+                and attempt.proposed_action_id == proposal.id
+                and attempt.proposal_series_id == proposal.proposal_series_id
+                and attempt.proposal_number == proposal.proposal_number
+                and attempt.proposal_payload_digest == proposal.payload_digest
+                and attempt.approval_decision_id == approval.id
+                and proposal.current_approval_id == approval.id
+                and approval.proposed_action_id == proposal.id
+                and approval.proposal_number == proposal.proposal_number
+                and approval.payload_digest == proposal.payload_digest
+                and approval.decision == "Approved"
+                and attempt.stable_outbound_key_scope == operation.outbound_key_scope
+                and attempt.stable_outbound_key_digest == operation.outbound_key_digest
+                and outbound_binding_matches(
+                    operation.id,
+                    operation.outbound_key_scope,
+                    operation.outbound_key_digest,
+                )
+            )
+        if not owner_eligible:
             return self._complete_guard(
                 idempotency,
                 reservation,
@@ -283,7 +333,7 @@ class AttemptStartService:
             if (
                 not valid_history
                 or historical.integration_attempt_id != attempt.id
-                or historical.operation_kind != "AIInterpretation"
+                or historical.operation_kind != attempt.operation_kind
                 or historical.workflow_service_identity != attempt.assigned_workflow_service
                 or historical.workflow_environment != attempt.workflow_environment
                 or historical.expires_at != attempt.callback_authorization_deadline
@@ -291,7 +341,7 @@ class AttemptStartService:
                 raise RuntimeError("attempt callback credential history is inconsistent")
         if (
             credential.integration_attempt_id != attempt.id
-            or credential.operation_kind != "AIInterpretation"
+            or credential.operation_kind != attempt.operation_kind
             or credential.workflow_service_identity != attempt.assigned_workflow_service
             or credential.workflow_environment != attempt.workflow_environment
             or credential.workflow_service_identity != machine.stable_service_id
@@ -391,6 +441,18 @@ class AttemptStartService:
             },
             "versions": {"integration_attempt": attempt.version},
         }
+        if attempt.operation_kind == "OutboundAction":
+            snapshot["result"].update(
+                {
+                    "proposed_action_id": str(attempt.proposed_action_id),
+                    "proposal_series_id": str(attempt.proposal_series_id),
+                    "proposal_number": attempt.proposal_number,
+                    "proposal_payload_digest": attempt.proposal_payload_digest,
+                    "approval_decision_id": str(attempt.approval_decision_id),
+                    "stable_outbound_key_scope": attempt.stable_outbound_key_scope,
+                    "stable_outbound_key_reference": outbound_key_reference(operation.id),
+                }
+            )
         completed = idempotency.complete(reservation, 200, snapshot)
         session.flush()
         return AttemptStartOutcome(

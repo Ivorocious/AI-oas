@@ -10,6 +10,9 @@ from ai_operations_automation.attempt_callbacks.models import (
     AiRetryableFailureCallbackRequest,
     AiSuccessCallbackRequest,
     AiTerminalFailureCallbackRequest,
+    OutboundRetryableFailureCallbackRequest,
+    OutboundSuccessCallbackRequest,
+    OutboundTerminalFailureCallbackRequest,
 )
 from ai_operations_automation.command_idempotency.keys import resolve_command_idempotency_key
 from ai_operations_automation.intake.errors import IntakeError, safe_validation_details
@@ -59,17 +62,55 @@ async def _parse_callback[CallbackRequest: BaseModel](
         ) from exc
 
 
-async def parse_ai_success_callback(request: Request) -> AiSuccessCallbackRequest:
-    return await _parse_callback(request, AiSuccessCallbackRequest)
+async def _parse_callback_choice(request: Request, ai_model, outbound_model, marker: str):
+    raw_body = await request.body()
+    if not raw_body or len(raw_body) > MAX_CALLBACK_BODY_BYTES:
+        raise IntakeError(400, "INVALID_COMMAND", "The callback body is invalid.")
+    try:
+        parsed = json.loads(raw_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise IntakeError(400, "INVALID_COMMAND", "The callback body is invalid.") from None
+    try:
+        evidence = parsed.get("evidence") if isinstance(parsed, dict) else None
+        model_type = (
+            outbound_model if isinstance(evidence, dict) and marker in evidence else ai_model
+        )
+        return model_type.model_validate(parsed)
+    except ValidationError as exc:
+        details = safe_validation_details(exc.errors(include_input=False, include_url=False))
+        raise IntakeError(
+            422, "VALIDATION_FAILED", "The callback failed validation.", details=details
+        ) from exc
+
+
+async def parse_ai_success_callback(
+    request: Request,
+) -> AiSuccessCallbackRequest | OutboundSuccessCallbackRequest:
+    return await _parse_callback_choice(
+        request,
+        AiSuccessCallbackRequest,
+        OutboundSuccessCallbackRequest,
+        "simulated_outcome",
+    )
 
 
 async def parse_ai_retryable_failure_callback(
     request: Request,
-) -> AiRetryableFailureCallbackRequest:
-    return await _parse_callback(request, AiRetryableFailureCallbackRequest)
+) -> AiRetryableFailureCallbackRequest | OutboundRetryableFailureCallbackRequest:
+    return await _parse_callback_choice(
+        request,
+        AiRetryableFailureCallbackRequest,
+        OutboundRetryableFailureCallbackRequest,
+        "customer_side_effect",
+    )
 
 
 async def parse_ai_terminal_failure_callback(
     request: Request,
-) -> AiTerminalFailureCallbackRequest:
-    return await _parse_callback(request, AiTerminalFailureCallbackRequest)
+) -> AiTerminalFailureCallbackRequest | OutboundTerminalFailureCallbackRequest:
+    return await _parse_callback_choice(
+        request,
+        AiTerminalFailureCallbackRequest,
+        OutboundTerminalFailureCallbackRequest,
+        "customer_side_effect",
+    )

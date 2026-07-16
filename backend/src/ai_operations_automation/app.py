@@ -17,10 +17,12 @@ from ai_operations_automation.api.human_review import router as human_review_rou
 from ai_operations_automation.api.intake import router as intake_router
 from ai_operations_automation.api.proposals import router as proposals_router
 from ai_operations_automation.api.retry_ai import router as retry_ai_router
+from ai_operations_automation.api.retry_outbound import router as retry_outbound_router
 from ai_operations_automation.api.service_requests import router as service_requests_router
 from ai_operations_automation.api.start_ai_interpretation import (
     router as start_ai_interpretation_router,
 )
+from ai_operations_automation.api.start_outbound import router as start_outbound_router
 from ai_operations_automation.api.terminal_failure import router as terminal_failure_router
 from ai_operations_automation.auth.verifier import SupabaseJwtVerifier, url_jwks_loader
 from ai_operations_automation.config import Settings, get_settings
@@ -127,7 +129,9 @@ def create_app(
     application.include_router(human_review_router)
     application.include_router(proposals_router)
     application.include_router(retry_ai_router)
+    application.include_router(retry_outbound_router)
     application.include_router(service_requests_router)
     application.include_router(start_ai_interpretation_router)
+    application.include_router(start_outbound_router)
     application.include_router(terminal_failure_router)
     return application

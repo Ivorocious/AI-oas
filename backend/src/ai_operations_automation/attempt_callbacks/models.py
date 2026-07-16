@@ -85,10 +85,6 @@ class AiInterpretationEvidence(ClosedModel):
 
 class AiSuccessEvidence(ClosedModel):
     result_schema_version: BoundedLabel
-    prompt_version: BoundedLabel
-    provider_name: BoundedLabel
-    model_name: BoundedLabel
-    adapter_name: BoundedLabel
     adapter_version: BoundedLabel
     safe_provider_correlation: SafeProviderCorrelation | None = None
     latency_ms: StrictInt | None = Field(default=None, ge=0, le=3_600_000)
@@ -225,3 +221,132 @@ class AiTerminalFailureCallbackResponse(ClosedModel):
     command_id: uuid.UUID
     result: AiTerminalFailureCallbackResult
     versions: AiCallbackVersions
+
+
+OutboundFailureCode = Literal[
+    "WORKFLOW_FAILED_BEFORE_PROVIDER_INVOCATION",
+    "PROVIDER_CONNECTION_FAILED",
+    "PROVIDER_TIMEOUT",
+    "PROVIDER_RATE_LIMITED",
+    "PROVIDER_TEMPORARILY_UNAVAILABLE",
+    "OUTBOUND_DESTINATION_REJECTED",
+    "OUTBOUND_PAYLOAD_REJECTED",
+    "OUTBOUND_OUTCOME_UNCERTAIN",
+]
+OutboundTerminalFailureCode = Literal[
+    "PROVIDER_AUTHENTICATION_FAILED",
+    "PROVIDER_AUTHORIZATION_FAILED",
+    "PROVIDER_CONFIGURATION_INVALID",
+    "PROVIDER_REQUEST_REJECTED",
+    "RECONCILIATION_PERMANENT_REJECTION",
+]
+OutboundFailureStage = Literal[
+    "BeforeDispatch",
+    "Dispatch",
+    "ProviderProcessing",
+    "ResponseValidation",
+    "Reconciliation",
+]
+OutboundProviderInvocation = Literal["NotInvoked", "Invoked", "InvocationUnknown"]
+
+
+class OutboundCallbackExpectedVersions(ClosedModel):
+    integration_attempt: PositiveVersion
+
+
+class OutboundSuccessEvidence(ClosedModel):
+    result_schema_version: Literal["mock-outbound-result-v1"]
+    adapter_version: Literal["1.0"]
+    simulated_outcome: Literal["Applied"]
+    safe_provider_correlation: SafeProviderCorrelation | None = None
+    safe_evidence_reference: SafeProviderCorrelation
+    safe_evidence_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    latency_ms: StrictInt | None = Field(default=None, ge=0, le=3_600_000)
+
+
+class OutboundSuccessCallbackRequest(ClosedModel):
+    schema_version: Literal["1.0"]
+    expected_versions: OutboundCallbackExpectedVersions
+    evidence: OutboundSuccessEvidence
+
+
+class OutboundFailureEvidence(ClosedModel):
+    failure_code: OutboundFailureCode
+    adapter_version: Literal["1.0"]
+    failure_stage: OutboundFailureStage
+    provider_invocation: OutboundProviderInvocation
+    customer_side_effect: Literal["KnownNotApplied", "Unknown"]
+    safe_provider_correlation: SafeProviderCorrelation | None = None
+    safe_evidence_reference: SafeProviderCorrelation
+    safe_evidence_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    retry_after_seconds: StrictInt | None = Field(default=None, ge=1, le=86_400)
+
+
+class OutboundRetryableFailureCallbackRequest(ClosedModel):
+    schema_version: Literal["1.0"]
+    expected_versions: OutboundCallbackExpectedVersions
+    evidence: OutboundFailureEvidence
+
+
+class OutboundTerminalFailureEvidence(ClosedModel):
+    failure_code: OutboundTerminalFailureCode
+    adapter_version: Literal["1.0"]
+    failure_stage: OutboundFailureStage
+    provider_invocation: OutboundProviderInvocation
+    customer_side_effect: Literal["KnownNotApplied", "Unknown"]
+    safe_provider_correlation: SafeProviderCorrelation | None = None
+    safe_evidence_reference: SafeProviderCorrelation
+    safe_evidence_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class OutboundTerminalFailureCallbackRequest(ClosedModel):
+    schema_version: Literal["1.0"]
+    expected_versions: OutboundCallbackExpectedVersions
+    evidence: OutboundTerminalFailureEvidence
+
+
+class OutboundCallbackVersions(ClosedModel):
+    service_request: PositiveVersion
+    proposed_action: PositiveVersion
+    logical_operation: PositiveVersion
+    integration_attempt: PositiveVersion
+
+
+class OutboundCallbackResult(ClosedModel):
+    service_request_id: uuid.UUID
+    proposed_action_id: uuid.UUID
+    proposal_series_id: uuid.UUID
+    proposal_number: StrictInt = Field(gt=0)
+    proposal_payload_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    approval_decision_id: uuid.UUID
+    logical_operation_id: uuid.UUID
+    integration_attempt_id: uuid.UUID
+    attempt_number: StrictInt = Field(ge=1, le=3)
+    attempt_state: Literal["Running", "Succeeded", "RetryableFailure", "TerminalFailure"]
+    proposal_state: Literal[
+        "PendingExecution",
+        "Executed",
+        "RetryableExecutionFailure",
+        "TerminalExecutionFailure",
+    ]
+    service_request_status: Literal[
+        "ActionPendingExecution", "Completed", "RetryableFailure", "TerminalFailure"
+    ]
+    service_request_queue: str | None = None
+    failure_code: str | None = None
+    recovery_disposition: str | None = None
+    customer_side_effect: str | None = None
+    maximum_attempts: StrictInt | None = Field(default=None, ge=1, le=3)
+    remaining_attempts: StrictInt | None = Field(default=None, ge=0, le=2)
+    next_eligible_at: AwareDatetime | None = None
+    reconciliation_deadline: AwareDatetime | None = None
+    completed_at: AwareDatetime | None = None
+    simulated_outcome: Literal["Applied"] | None = None
+
+
+class OutboundCallbackResponse(ClosedModel):
+    schema_version: Literal["1.0"] = "1.0"
+    correlation_id: uuid.UUID
+    command_id: uuid.UUID
+    result: OutboundCallbackResult
+    versions: OutboundCallbackVersions

@@ -1,6 +1,6 @@
 # Proposed API Contracts
 
-> Implementation status: Checkpoint 3 implements the six proposal command routes described here. They use closed bodies, human bearer authentication, current application roles, required `Idempotency-Key`, exact aggregate versions, and exact frozen-digest binding. Proposal query routes remain deferred.
+> Implementation status: Checkpoint 4 exposes 21 production paths, including HMAC-authenticated `start-outbound` and mixed-authority `retry-outbound`, and generalizes existing attempt start, credential replacement, and callback routes for closed `OutboundAction` bodies. AI success callbacks no longer echo backend-owned prompt/provider/model/adapter-name identity; FastAPI derives it from frozen persistence and validates the remaining bounded evidence. Proposal query routes remain deferred and no provider is invoked.
 
 ## Status and scope
 

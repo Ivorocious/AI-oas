@@ -4,9 +4,13 @@
 
 **Phase 2 — Executable Foundation: underway.**
 
-Phase 0 product definition and Phase 1 technical design are complete. Phase 2 now has a runnable foundation, atomic intake, the complete bounded AI-attempt execution/recovery lifecycle, deterministic triage/duplicate/human review, and proposal approval. Remaining detailed decisions continue to be resolved incrementally within focused implementation tasks.
+Phase 0 product definition and Phase 1 technical design are complete. Phase 2 has a runnable foundation, atomic intake, the complete bounded AI-attempt execution/recovery lifecycle, deterministic triage/duplicate/human review, and proposal approval. Checkpoint 4 mock outbound execution/recovery is an uncommitted implementation candidate under recovery: it is not completed, accepted, committed, pushed, or published. Phase 2 is not complete.
 
 ## Completed work
+
+- Checkpoint 4 candidate: migration `0012_mock_outbound_execution_foundation` is staged for recovery review. It is intended to add exact outbound proposal/approval/operation/key bindings, backend-owned stable key reuse, mock start/claim/success/failure/retry, proposal-defect revision, bounded uncertainty reconciliation, exact 15-minute unresolved terminalization, stale assessment, credential replacement, and manager/administrator terminal disposition. Historical validation claims are not bound to this candidate.
+- The candidate is intended to reconcile the AI success callback contract: prompt version, provider, model, and adapter name come from frozen backend intent; the closed callback supplies only approved bounded evidence. This remains subject to Checkpoint 4 recovery validation.
+- The candidate is intended to record simulated outbound evidence only. No real provider invocation, real email, n8n workflow, EventPublisher, or outbox publication-attempt persistence is intended or accepted.
 
 - Implemented migration `0011_proposal_approval_foundation`, bringing the application inventory to 26 tables. It adds the four approved proposal, contributor, frozen-exclusion, and exact-decision tables; generalizes logical operations without weakening AI constraints; and adds the request's same-request active-proposal reference.
 - Implemented six human-authenticated proposal commands for draft creation/editing, submission, approval, rejection, and material revision. The lifecycle preserves one series-owned outbound logical operation, deterministic closed-payload digests, immutable contributor carry-forward, frozen actor-UUID self-approval exclusions, exact decision binding, optimistic versions, command idempotency, and transactional audit/outbox evidence.
@@ -55,7 +59,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 no
 
 ## Active task
 
-No active Checkpoint 3 publication task remains. Checkpoint 3 is complete, and its implementation and hardening commits are pushed. The current next milestone is Checkpoint 4 — Mock outbound execution and recovery.
+Checkpoint 4 is an uncommitted implementation candidate under recovery. It is not completed, accepted, committed, pushed, or published. Checkpoint 5 — Protected queries and final Phase 2 acceptance — has not started.
 
 ## Blockers
 
@@ -118,9 +122,9 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Known limitations
 
-- The backend includes atomic intake, human authentication, protected request detail, 26-table persistence, WorkflowService HMAC/nonce authentication, command idempotency, the complete bounded AI attempt lifecycle, deterministic triage/review, and proposal approval. `CompleteTriage` remains trusted in-process functionality. No outbound attempt, outbound callback credential, provider invocation, email execution, real integration, n8n workflow, publisher, frontend, or deployment exists.
+- The backend includes atomic intake, human authentication, protected request detail, 26-table persistence, WorkflowService HMAC/nonce authentication, command idempotency, the complete bounded AI attempt lifecycle, deterministic triage/review, and proposal approval. The mock-outbound implementation remains an uncommitted Checkpoint 4 candidate under recovery; `CompleteTriage` is trusted in-process functionality, and the candidate's stale/deadline assessment remains subject to recovery validation. No provider invocation, email execution, real integration, n8n workflow, publisher, frontend, or deployment exists.
 - Start AI generates one callback plaintext value in memory and issues it only after commit; only its SHA-256 hash and safe metadata are stored. No provider request/response body or real AI provider credential is created or stored.
-- The immutable demonstration failure policy, AI assessment/retry delays, AI stale boundaries, deterministic decision policy, and proposal approval lifecycle are executable. Outbound execution/reconciliation and real-world policy calibration remain unimplemented.
+- The immutable demonstration failure policy, AI assessment/retry delays, AI stale boundaries, deterministic decision policy, and proposal approval lifecycle are executable. The mock-outbound candidate is intended to add outbound execution/reconciliation; real-world policy calibration remains unimplemented.
 - No real email is sent; only a proposed mock adapter is approved for the MVP.
 - The design targets one demonstration organization, one primary intake path, and modest operational scale.
 - Billing, payments, multi-tenancy, mobile apps, full CRM behavior, autonomous communication, large-scale analytics, numerous real integrations, enterprise authentication, microservices, and Kubernetes remain outside scope.
@@ -129,4 +133,4 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 **Checkpoint 4 — Mock outbound execution and recovery.**
 
-Reconcile the AI success-callback transport contract before generalizing callbacks to `OutboundAction`: the executable AI success request currently requires echoed prompt/provider/model/adapter identity beyond the shorter API-contract summary. Outbound start/callback/retry/reconciliation must preserve the exact approved proposal binding and must never send real email.
+After Checkpoint 4 recovery validation and acceptance, Checkpoint 5 may add protected query expansion and the final twelve-scenario Phase 2 acceptance without weakening the AI or candidate mock-outbound lifecycle. Real provider/email execution, n8n, and EventPublisher remain deferred.

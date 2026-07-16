@@ -22,6 +22,7 @@ from ai_operations_automation.db.models.ai_execution import (
     LogicalOperation,
 )
 from ai_operations_automation.db.models.intake import ServiceRequest
+from ai_operations_automation.db.models.proposal import ApprovalDecision, ProposedAction
 from ai_operations_automation.event_writing import (
     AuditSpec,
     OutboxSpec,
@@ -37,12 +38,15 @@ from ai_operations_automation.failure_recovery import (
     RecoveryDisposition,
     assess_failure,
     is_ai_running_stale,
+    is_outbound_reconciliation_due,
     is_pending_stale,
+    outbound_reconciliation_deadline,
 )
 from ai_operations_automation.failure_recovery.repository import (
     select_active_failure_policy,
 )
 from ai_operations_automation.intake.errors import IntakeError
+from ai_operations_automation.outbound_identity import outbound_binding_matches
 
 BACKEND_SERVICE_ACTOR_ID = uuid.UUID("ad2f513b-aa42-5bb8-81bd-caeff2fb5078")
 ROUTE_TEMPLATE = "/internal/assess-stale-attempt"
@@ -168,12 +172,25 @@ class AssessStaleAttemptService:
         ).all()
         if operation is None or service_request is None:
             raise RuntimeError("stale attempt ownership graph is incomplete")
+        proposal = None
+        approval = None
+        if attempt.operation_kind == "OutboundAction":
+            proposal = session.scalar(
+                select(ProposedAction)
+                .where(ProposedAction.id == attempt.proposed_action_id)
+                .with_for_update()
+            )
+            approval = session.scalar(
+                select(ApprovalDecision)
+                .where(ApprovalDecision.id == attempt.approval_decision_id)
+                .with_for_update()
+            )
         database_now = session.scalar(select(func.now()))
         if database_now is None or database_now.tzinfo is None or database_now.utcoffset() is None:
             raise RuntimeError("database time must be timezone-aware")
         if (
-            attempt.operation_kind != "AIInterpretation"
-            or operation.operation_kind != "AIInterpretation"
+            attempt.operation_kind not in ("AIInterpretation", "OutboundAction")
+            or operation.operation_kind != attempt.operation_kind
             or operation.service_request_id != service_request.id
             or attempt.service_request_id != service_request.id
             or operation.succeeded_attempt_id is not None
@@ -189,16 +206,67 @@ class AssessStaleAttemptService:
                 "INVALID_STATE_TRANSITION",
                 "The attempt cannot be assessed from its current lifecycle context.",
             )
+        if attempt.operation_kind == "OutboundAction" and not (
+            proposal is not None
+            and approval is not None
+            and service_request.current_proposed_action_id == proposal.id
+            and service_request.status == "ActionPendingExecution"
+            and proposal.state == "PendingExecution"
+            and proposal.service_request_id == service_request.id
+            and proposal.logical_operation_id == operation.id
+            and proposal.proposal_series_id
+            == operation.proposal_series_id
+            == attempt.proposal_series_id
+            and attempt.proposed_action_id == proposal.id
+            and attempt.proposal_number == proposal.proposal_number
+            and attempt.proposal_payload_digest == proposal.payload_digest
+            and attempt.approval_decision_id == approval.id == proposal.current_approval_id
+            and approval.proposed_action_id == proposal.id
+            and approval.proposal_number == proposal.proposal_number
+            and approval.payload_digest == proposal.payload_digest
+            and approval.decision == "Approved"
+            and attempt.stable_outbound_key_scope == operation.outbound_key_scope
+            and attempt.stable_outbound_key_digest == operation.outbound_key_digest
+            and outbound_binding_matches(
+                operation.id, operation.outbound_key_scope, operation.outbound_key_digest
+            )
+        ):
+            return self._guard(
+                idempotency,
+                reservation,
+                409,
+                "OUTBOUND_BINDING_CONFLICT",
+                "The exact outbound execution binding is no longer valid.",
+            )
+        unresolved = False
         if attempt.state == "Pending":
             eligible = is_pending_stale(attempt.created_at, database_now)
             failure_code = FailureCode.ATTEMPT_PENDING_STALE
             stage = FailureStage.BEFORE_DISPATCH
             invocation = ProviderInvocation.NOT_INVOKED
-        elif attempt.state == "Running" and attempt.started_at is not None:
+        elif (
+            attempt.operation_kind == "AIInterpretation"
+            and attempt.state == "Running"
+            and attempt.started_at is not None
+        ):
             eligible = is_ai_running_stale(attempt.started_at, database_now)
             failure_code = FailureCode.AI_ATTEMPT_RUNNING_STALE
             stage = FailureStage.PROVIDER_PROCESSING
             invocation = ProviderInvocation.INVOCATION_UNKNOWN
+        elif (
+            attempt.operation_kind == "OutboundAction"
+            and attempt.state == "Running"
+            and attempt.started_at is not None
+            and attempt.reconciliation_status == "Required"
+            and attempt.customer_side_effect == "Unknown"
+            and attempt.reconciliation_deadline
+            == outbound_reconciliation_deadline(attempt.started_at)
+        ):
+            eligible = is_outbound_reconciliation_due(attempt.started_at, database_now)
+            failure_code = FailureCode.OUTBOUND_OUTCOME_UNRESOLVED
+            stage = FailureStage.RECONCILIATION
+            invocation = ProviderInvocation.INVOCATION_UNKNOWN
+            unresolved = True
         else:
             return self._guard(
                 idempotency,
@@ -219,11 +287,17 @@ class AssessStaleAttemptService:
         policy = select_active_failure_policy(session, database_now)
         assessment = assess_failure(
             FailureAssessmentInput(
-                operation_kind=OperationKind.AI_INTERPRETATION,
+                operation_kind=OperationKind(attempt.operation_kind),
                 failure_code=failure_code,
                 failure_stage=stage,
                 provider_invocation=invocation,
-                customer_side_effect=CustomerSideEffect.NOT_APPLICABLE,
+                customer_side_effect=(
+                    CustomerSideEffect.NOT_APPLICABLE
+                    if attempt.operation_kind == "AIInterpretation"
+                    else CustomerSideEffect.UNKNOWN
+                    if unresolved
+                    else CustomerSideEffect.KNOWN_NOT_APPLIED
+                ),
                 attempt_number=attempt.attempt_number,
                 assessed_at=database_now,
                 attempt_started_at=attempt.started_at,
@@ -257,8 +331,9 @@ class AssessStaleAttemptService:
         attempt.provider_retry_after_at = None
         attempt.reconciliation_status = assessment.reconciliation_status.value
         attempt.reconciliation_deadline = None
-        attempt.sanitized_evidence_reference = f"internal-command:{reservation.command_id}"
-        attempt.sanitized_evidence_hash = evidence_hash
+        if not unresolved:
+            attempt.sanitized_evidence_reference = f"internal-command:{reservation.command_id}"
+            attempt.sanitized_evidence_hash = evidence_hash
         attempt.terminal_reason = (
             assessment.terminal_reason.value if assessment.terminal_reason is not None else None
         )
@@ -277,10 +352,23 @@ class AssessStaleAttemptService:
         service_request.version += 1
         service_request.status = resulting_state
         service_request.current_queue = "FailedRetryRequired" if retryable else None
-        service_request.recovery_target = "TriagePending" if retryable else None
+        service_request.recovery_target = (
+            "TriagePending"
+            if retryable and attempt.operation_kind == "AIInterpretation"
+            else "ActionPendingExecution"
+            if retryable
+            else None
+        )
         service_request.recovery_attempt_id = attempt.id
         service_request.failure_summary_code = failure_code.value
         service_request.terminal_at = None if retryable else database_now
+        if proposal is not None:
+            proposal.state = (
+                "RetryableExecutionFailure" if retryable else "TerminalExecutionFailure"
+            )
+            proposal.version += 1
+            if not retryable:
+                proposal.terminal_at = database_now
         session.flush()
         safe_evidence = {
             "service_request_id": str(service_request.id),
@@ -300,6 +388,16 @@ class AssessStaleAttemptService:
             ),
             "assessed_at": database_now.isoformat(),
         }
+        if proposal is not None:
+            safe_evidence.update(
+                {
+                    "proposed_action_id": str(proposal.id),
+                    "proposal_state": proposal.state,
+                    "proposal_number": proposal.proposal_number,
+                    "proposal_payload_digest": proposal.payload_digest,
+                    "approval_decision_id": str(approval.id),
+                }
+            )
         write_audit_and_optional_outbox(
             session,
             AuditSpec(
@@ -327,6 +425,7 @@ class AssessStaleAttemptService:
                     "service_request": service_request.version,
                     "logical_operation": operation.version,
                     "integration_attempt": attempt.version,
+                    **({"proposed_action": proposal.version} if proposal is not None else {}),
                 },
             },
         )

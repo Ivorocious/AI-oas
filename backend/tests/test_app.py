@@ -173,6 +173,8 @@ def test_route_inventory_and_interpretation_reference_is_nullable_uuid() -> None
         "/api/v1/proposed-actions/{action_id}/commands/approve",
         "/api/v1/proposed-actions/{action_id}/commands/reject",
         "/api/v1/proposed-actions/{action_id}/commands/create-material-revision",
+        "/api/v1/proposed-actions/{action_id}/commands/start-outbound",
+        "/api/v1/proposed-actions/{action_id}/commands/retry-outbound",
     }
     field = schema["components"]["schemas"]["ActiveReferences"]["properties"][
         "current_interpretation_id"

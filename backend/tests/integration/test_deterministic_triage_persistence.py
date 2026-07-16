@@ -25,7 +25,7 @@ from alembic import command
 pytestmark = pytest.mark.integration
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 PREVIOUS_HEAD = "0009_failure_recovery_foundation"
-CURRENT_HEAD = "0011_proposal_approval_foundation"
+CURRENT_HEAD = "0012_mock_outbound_execution_foundation"
 SEEDED_POLICY_TABLES = {
     "decision_policy_versions",
     "failure_recovery_policy_versions",

@@ -294,10 +294,6 @@ def _success_command(settings: Settings) -> AiSuccessCallbackRequest:
             "expected_versions": {"integration_attempt": 2},
             "evidence": {
                 "result_schema_version": settings.ai_interpretation_result_schema_version,
-                "prompt_version": settings.ai_interpretation_prompt_version,
-                "provider_name": settings.ai_provider_name,
-                "model_name": settings.ai_model_name,
-                "adapter_name": settings.ai_adapter_name,
                 "adapter_version": settings.ai_adapter_version,
                 "safe_provider_correlation": "provider-safe-correlation-001",
                 "latency_ms": 125,

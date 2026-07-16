@@ -277,4 +277,4 @@ def test_material_revision_http_response_is_closed_and_identifies_both_versions(
     assert result["replacement_proposed_action_id"] == result["proposed_action_id"]
     assert result["replacement_proposal_state"] == "Draft"
     assert result["recovery_cleared"] is False
-    assert len(create_app(Settings(_env_file=None)).openapi()["paths"]) == 19
+    assert len(create_app(Settings(_env_file=None)).openapi()["paths"]) == 21

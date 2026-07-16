@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-- Current checkpoint: Checkpoint 3 — Proposal, approval, rejection, and material revision — is complete.
+- Current checkpoint: Checkpoint 4 — Mock outbound execution and recovery — is complete after its final acceptance gate.
 - Published commits: implementation `619f2166c9e7e8c5e5c5ddae0e694cf7186069b8`; hardening `fa0d76580cfb3a258de0c3e5f7675eb1dc02697f`. Both commits are pushed.
 - Branch: `phase-2-completion`.
 - Current branch head: `fa0d76580cfb3a258de0c3e5f7675eb1dc02697f`.
@@ -52,8 +52,17 @@
 
 ## Remaining batches
 
-1. Add mock outbound execution lifecycle.
-2. Complete protected queries and Phase 2 acceptance.
+1. Complete protected queries and Phase 2 acceptance.
+
+## Completed Batch 4 implementation
+
+- Migration added: `0012_mock_outbound_execution_foundation` (parent `0011_proposal_approval_foundation`), retaining exactly 26 application tables.
+- Production paths added: HMAC-authenticated `start-outbound` and mixed-authority `retry-outbound`, bringing production OpenAPI to 21 paths. Existing claim/start, result callback, credential replacement, stale assessment, and terminal-disposition services now support explicit `OutboundAction` contracts.
+- Guarantees added: exact request/series/proposal/digest/approval/adapter/workflow/key binding, backend-owned stable key reuse, one shared three-attempt budget, known-not-applied retry, proposal-defect revision, no blind retry under uncertainty, and exact 15-minute unresolved terminalization.
+- AI callback reconciliation completed: backend-owned prompt, provider, model, and adapter name are derived from frozen persistence instead of echoed by the success callback.
+- The adapter and callback evidence are explicitly mock/simulated. No real provider invocation, real email, n8n workflow, EventPublisher, or publication-attempt persistence was added.
+- Final acceptance gate: 566 offline and 348 PostgreSQL integration tests passed (914 collected); Alembic head/drift and both migration round trips passed; Ruff and format passed; application import, 26-table inventory, 21-path OpenAPI inventory, test-route exclusion, and `git diff --check` passed.
+- Checkpoint 5 remains protected query expansion and final twelve-scenario Phase 2 acceptance. Phase 2 is not complete.
 
 ## Completed Batch 3 implementation
 

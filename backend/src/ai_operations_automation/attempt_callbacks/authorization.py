@@ -201,10 +201,19 @@ class CallbackCommandAuthorizer:
             attempt.operation_kind != expected_operation_kind
             or operation.operation_kind != expected_operation_kind
             or attempt.operation_kind != operation.operation_kind
-            or attempt.adapter_name != operation.adapter_name
-            or attempt.adapter_version != operation.adapter_version
         ):
             _internal_error("attempt does not match frozen operation intent")
+        if expected_operation_kind == "AIInterpretation" and (
+            attempt.adapter_name != operation.adapter_name
+            or attempt.adapter_version != operation.adapter_version
+        ):
+            _internal_error("AI attempt does not match frozen operation intent")
+        if expected_operation_kind == "OutboundAction" and (
+            attempt.proposal_series_id != operation.proposal_series_id
+            or attempt.stable_outbound_key_scope != operation.outbound_key_scope
+            or attempt.stable_outbound_key_digest != operation.outbound_key_digest
+        ):
+            _internal_error("outbound attempt does not match frozen operation intent")
         if (
             operation.service_request_id != service_request.id
             or attempt.service_request_id != service_request.id

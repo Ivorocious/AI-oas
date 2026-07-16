@@ -36,6 +36,8 @@ EXPECTED_ROUTES = {
     "/api/v1/proposed-actions/{action_id}/commands/approve",
     "/api/v1/proposed-actions/{action_id}/commands/reject",
     "/api/v1/proposed-actions/{action_id}/commands/create-material-revision",
+    "/api/v1/proposed-actions/{action_id}/commands/start-outbound",
+    "/api/v1/proposed-actions/{action_id}/commands/retry-outbound",
     *BATCH_1_ROUTES,
 }
 
@@ -69,16 +71,17 @@ def test_each_batch1_route_has_a_resolved_closed_json_request_body(
     request_body = operation["requestBody"]
     assert request_body["required"] is True
     body_schema = request_body["content"]["application/json"]["schema"]
-    assert body_schema["title"] == model_title
-    assert body_schema["type"] == "object"
-    assert body_schema["additionalProperties"] is False
+    candidates = body_schema.get("oneOf", [body_schema])
+    matching = [schema for schema in candidates if schema.get("title") == model_title]
+    assert len(matching) == 1
+    selected = matching[0]
+    assert selected["type"] == "object"
+    assert selected["additionalProperties"] is False
     assert not any(
-        isinstance(item, dict) and ("$ref" in item or "$defs" in item) for item in walk(body_schema)
+        isinstance(item, dict) and ("$ref" in item or "$defs" in item) for item in walk(selected)
     )
     objects = [
-        item
-        for item in walk(body_schema)
-        if isinstance(item, dict) and item.get("type") == "object"
+        item for item in walk(selected) if isinstance(item, dict) and item.get("type") == "object"
     ]
     assert objects
     assert all(item.get("additionalProperties") is False for item in objects)

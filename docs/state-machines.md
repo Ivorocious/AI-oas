@@ -2,7 +2,7 @@
 
 ## Status and notation
 
-This document defines implementation-neutral lifecycle behavior for the [domain model](domain-model.md); proposed database backstops and atomic patterns are defined in the [persistence design](persistence-design.md), while exact triage outputs are defined in the [deterministic triage policy](deterministic-decision-policy.md). It is an approved design, not implemented functionality. State names are shown in `PascalCase`; commands are authorized FastAPI backend operations, even when initiated by the frontend or coordinated by n8n.
+This document defines the approved lifecycle behavior; the AI, triage/review, proposal/approval, and mock outbound execution/recovery portions are implemented through Checkpoint 4. Outbound behavior includes known-not-applied retry, proposal-defect revision, and bounded uncertain-outcome reconciliation, while no real provider or email side effect exists. State names are shown in `PascalCase`; commands are authorized FastAPI backend operations.
 
 Unless a row explicitly says otherwise, a failed guard leaves canonical state unchanged, returns a conflict or validation result, and records a rejected-command audit event when the attempt is security-relevant or operationally material. Successful backend-controlled transitions, required audit evidence, and integration outbox messages commit in one database transaction.
 

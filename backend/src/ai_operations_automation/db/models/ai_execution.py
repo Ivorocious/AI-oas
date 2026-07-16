@@ -1,4 +1,4 @@
-"""AI-only logical operation, attempt, credential, and interpretation evidence."""
+"""AI and mock-outbound operation, attempt, credential, and result evidence."""
 
 import uuid
 from datetime import datetime
@@ -79,6 +79,19 @@ class LogicalOperation(Base):
             "proposal_series_id",
             name="uq_logical_operations_outbound_identity",
         ),
+        UniqueConstraint(
+            "id",
+            "service_request_id",
+            "proposal_series_id",
+            "outbound_key_scope",
+            "outbound_key_digest",
+            name="uq_logical_operations_outbound_binding",
+        ),
+        UniqueConstraint(
+            "outbound_key_scope",
+            "outbound_key_digest",
+            name="uq_logical_operations_outbound_key",
+        ),
         CheckConstraint(
             "operation_kind IN ('AIInterpretation', 'OutboundAction')",
             name="operation_kind_valid",
@@ -109,7 +122,9 @@ class LogicalOperation(Base):
             "AND prompt_version IS NULL AND result_schema_version IS NULL "
             "AND provider_name IS NULL AND model_name IS NULL "
             "AND adapter_name IS NULL AND adapter_version IS NULL "
-            "AND outbound_execution_key IS NULL)",
+            "AND ((outbound_key_scope IS NULL AND outbound_key_digest IS NULL) OR "
+            "(char_length(trim(outbound_key_scope)) > 0 AND "
+            "outbound_key_digest ~ '^[0-9a-f]{64}$')))",
             name="kind_fields_consistent",
         ),
         Index("ix_logical_operations_service_request_created", "service_request_id", "created_at"),
@@ -123,7 +138,8 @@ class LogicalOperation(Base):
     )
     operation_kind: Mapped[str] = mapped_column(String(32), nullable=False)
     proposal_series_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    outbound_execution_key: Mapped[str | None] = mapped_column(String(128))
+    outbound_key_scope: Mapped[str | None] = mapped_column(String(100))
+    outbound_key_digest: Mapped[str | None] = mapped_column(String(64))
     input_hash: Mapped[str | None] = mapped_column(String(64))
     configuration_hash: Mapped[str | None] = mapped_column(String(64))
     prompt_version: Mapped[str | None] = mapped_column(String(100))
@@ -159,6 +175,11 @@ class IntegrationAttempt(Base):
             "attempt_number",
             name="uq_integration_attempts_operation_attempt",
         ),
+        UniqueConstraint(
+            "id",
+            "operation_kind",
+            name="uq_integration_attempts_credential_identity",
+        ),
         ForeignKeyConstraint(
             (
                 "failure_policy_id",
@@ -175,7 +196,62 @@ class IntegrationAttempt(Base):
             name="fk_attempt_failure_recovery_policy_identity",
             ondelete="RESTRICT",
         ),
-        CheckConstraint("operation_kind = 'AIInterpretation'", name="operation_kind_valid"),
+        ForeignKeyConstraint(
+            (
+                "logical_operation_id",
+                "service_request_id",
+                "proposal_series_id",
+                "stable_outbound_key_scope",
+                "stable_outbound_key_digest",
+            ),
+            (
+                "logical_operations.id",
+                "logical_operations.service_request_id",
+                "logical_operations.proposal_series_id",
+                "logical_operations.outbound_key_scope",
+                "logical_operations.outbound_key_digest",
+            ),
+            name="fk_attempt_exact_outbound_operation",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            (
+                "proposed_action_id",
+                "service_request_id",
+                "proposal_series_id",
+                "proposal_number",
+                "proposal_payload_digest",
+            ),
+            (
+                "proposed_actions.id",
+                "proposed_actions.service_request_id",
+                "proposed_actions.proposal_series_id",
+                "proposed_actions.proposal_number",
+                "proposed_actions.payload_digest",
+            ),
+            name="fk_attempt_exact_outbound_proposal",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            (
+                "approval_decision_id",
+                "proposed_action_id",
+                "proposal_number",
+                "proposal_payload_digest",
+            ),
+            (
+                "approval_decisions.id",
+                "approval_decisions.proposed_action_id",
+                "approval_decisions.proposal_number",
+                "approval_decisions.payload_digest",
+            ),
+            name="fk_attempt_exact_outbound_approval",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "operation_kind IN ('AIInterpretation', 'OutboundAction')",
+            name="operation_kind_valid",
+        ),
         CheckConstraint("attempt_number BETWEEN 1 AND 3", name="attempt_number_valid"),
         CheckConstraint(
             "state IN ('Pending', 'Running', 'Succeeded', 'RetryableFailure', 'TerminalFailure')",
@@ -273,10 +349,47 @@ class IntegrationAttempt(Base):
             name="ai_recovery_assessment_valid",
         ),
         CheckConstraint(
+            "failure_policy_id IS NULL OR operation_kind = 'AIInterpretation' OR "
+            "(operation_kind = 'OutboundAction' AND "
+            "((state = 'Running' AND customer_side_effect = 'Unknown' "
+            "AND recovery_disposition = 'ReconcileBeforeRetry' "
+            "AND reconciliation_status = 'Required' AND reconciliation_deadline IS NOT NULL "
+            "AND next_eligible_at IS NULL AND provider_retry_after_at IS NULL "
+            "AND terminal_reason IS NULL) OR "
+            "(state = 'RetryableFailure' AND customer_side_effect = 'KnownNotApplied' "
+            "AND recovery_disposition IN ('RetrySameOperation', 'ReviseProposal') "
+            "AND reconciliation_status = 'NotRequired' AND reconciliation_deadline IS NULL "
+            "AND remaining_attempts > 0 "
+            "AND ((recovery_disposition = 'RetrySameOperation' AND next_eligible_at IS NOT NULL) "
+            "OR (recovery_disposition = 'ReviseProposal' AND next_eligible_at IS NULL)) "
+            "AND terminal_reason IS NULL) OR "
+            "(state = 'TerminalFailure' AND recovery_disposition = 'Terminal' "
+            "AND reconciliation_status = 'NotRequired' AND reconciliation_deadline IS NULL "
+            "AND next_eligible_at IS NULL AND terminal_reason IS NOT NULL)))",
+            name="outbound_recovery_assessment_valid",
+        ),
+        CheckConstraint(
+            "(operation_kind = 'AIInterpretation' AND proposal_series_id IS NULL "
+            "AND proposed_action_id IS NULL AND proposal_number IS NULL "
+            "AND proposal_payload_digest IS NULL "
+            "AND approval_decision_id IS NULL AND stable_outbound_key_scope IS NULL "
+            "AND stable_outbound_key_digest IS NULL) OR "
+            "(operation_kind = 'OutboundAction' AND proposal_series_id IS NOT NULL "
+            "AND proposed_action_id IS NOT NULL AND proposal_number IS NOT NULL "
+            "AND proposal_number > 0 "
+            "AND proposal_payload_digest ~ '^[0-9a-f]{64}$' "
+            "AND approval_decision_id IS NOT NULL "
+            "AND char_length(trim(stable_outbound_key_scope)) > 0 "
+            "AND stable_outbound_key_digest ~ '^[0-9a-f]{64}$')",
+            name="kind_binding_consistent",
+        ),
+        CheckConstraint(
             "(state = 'Pending' AND started_at IS NULL AND completed_at IS NULL "
             "AND result_hash IS NULL AND sanitized_error_code IS NULL) OR "
             "(state = 'Running' AND started_at IS NOT NULL AND completed_at IS NULL "
-            "AND result_hash IS NULL AND sanitized_error_code IS NULL) OR "
+            "AND result_hash IS NULL AND (sanitized_error_code IS NULL OR "
+            "(operation_kind = 'OutboundAction' AND failure_policy_id IS NOT NULL "
+            "AND reconciliation_status = 'Required'))) OR "
             "(state = 'Succeeded' AND started_at IS NOT NULL AND completed_at IS NOT NULL "
             "AND result_hash IS NOT NULL AND sanitized_error_code IS NULL) OR "
             "(state IN ('RetryableFailure', 'TerminalFailure') AND completed_at IS NOT NULL "
@@ -329,6 +442,13 @@ class IntegrationAttempt(Base):
         nullable=False,
     )
     operation_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    proposal_series_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    proposed_action_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    proposal_number: Mapped[int | None] = mapped_column(Integer)
+    proposal_payload_digest: Mapped[str | None] = mapped_column(String(64))
+    approval_decision_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    stable_outbound_key_scope: Mapped[str | None] = mapped_column(String(100))
+    stable_outbound_key_digest: Mapped[str | None] = mapped_column(String(64))
     attempt_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     state: Mapped[str] = mapped_column(String(32), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
@@ -379,7 +499,16 @@ class AttemptCallbackCredential(Base):
             name="uq_attempt_callback_credentials_attempt_credential_version",
         ),
         UniqueConstraint("credential_hash", name="uq_attempt_callback_credentials_credential_hash"),
-        CheckConstraint("operation_kind = 'AIInterpretation'", name="operation_kind_valid"),
+        ForeignKeyConstraint(
+            ("integration_attempt_id", "operation_kind"),
+            ("integration_attempts.id", "integration_attempts.operation_kind"),
+            name="fk_callback_credential_attempt_kind",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "operation_kind IN ('AIInterpretation', 'OutboundAction')",
+            name="operation_kind_valid",
+        ),
         CheckConstraint("credential_version > 0", name="credential_version_positive"),
         CheckConstraint(HASH_CHECK.format(column="credential_hash"), name="credential_hash_valid"),
         CheckConstraint("expires_at > issued_at", name="expiry_valid"),

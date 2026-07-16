@@ -6,7 +6,7 @@ The product remains configurable across service companies instead of assuming a 
 
 ## Status
 
-Phase 0 and Phase 1 are complete; Phase 2 is underway. The executable backend now includes intake, human access, the bounded AI attempt lifecycle, deterministic triage/review, and the proposal approval lifecycle. Migration `0011_proposal_approval_foundation` brings the schema to 26 application tables and production OpenAPI exposes 19 paths. Proposal create, edit, submit, approve, reject, and material-revision commands use exact versions, deterministic payload digests, immutable contributors, frozen self-approval exclusions, one outbound logical operation per series, command idempotency, and atomic safe evidence.
+Phase 0 and Phase 1 are complete; Phase 2 is underway through Checkpoint 4. The executable backend now includes intake, human access, the bounded AI attempt lifecycle, deterministic triage/review, proposal approval, and mock outbound execution/recovery. Migration `0012_mock_outbound_execution_foundation` keeps the schema at 26 application tables and production OpenAPI exposes 21 paths. Outbound attempts bind the exact proposal, approval, series operation, assigned workflow identity, adapter, callback authorization, and backend-owned stable key; retry and uncertain-outcome handling remain bounded and transactional.
 
 - [Backend setup, startup, and validation](backend/README.md)
 
@@ -30,4 +30,4 @@ Phase 0 and Phase 1 are complete; Phase 2 is underway. The executable backend no
 
 ## Implementation honesty
 
-No AI or outbound provider is invoked. AI callback evidence remains advisory: only the deterministic backend evaluator can derive category, priority, queue, routing, and review state. The current implementation has no public complete-triage endpoint; trusted backend code invokes that service in process. Proposal commands create no integration attempt or callback credential and send no email. Outbound start/callback/retry/reconciliation, protected query expansion, final scenario acceptance, real integrations, n8n workflows, event publication, frontend, and deployment remain unimplemented.
+No AI or outbound provider is invoked, and the mock outbound lifecycle never sends or claims to send email. AI callback success now derives backend-owned prompt, provider, model, and adapter identity from frozen persistence while accepting only the approved bounded callback evidence. Protected query expansion, final Phase 2 scenario acceptance, real integrations, n8n workflows, EventPublisher execution, frontend, and deployment remain unimplemented; these are not part of Checkpoint 4.

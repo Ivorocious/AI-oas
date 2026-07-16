@@ -1,5 +1,7 @@
 # Proposed Failure and Recovery Policy
 
+> Implementation status: Checkpoint 4 executes the approved mock outbound policy: one- and five-minute known-not-applied retry delays, proposal-defect revision, one shared three-attempt operation budget, stale Pending assessment at two minutes, and uncertain-outcome terminalization at the exact 15-minute deadline. Unknown effects never retry blindly and no provider or email side effect exists.
+
 ## Status and scope
 
 This approved Phase 1 design defines deterministic failure classification, retry eligibility, bounded recovery, stale-attempt assessment, and uncertain outbound reconciliation. Phase 2 now implements the immutable policy version, the complete AI success/failure/retry lifecycle, exact retry calculations, callback-credential replacement, manager terminal disposition, and trusted Pending/Running AI stale assessment.

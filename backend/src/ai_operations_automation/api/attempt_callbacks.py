@@ -19,6 +19,13 @@ from ai_operations_automation.attempt_callbacks.models import (
     AiSuccessCallbackResponse,
     AiTerminalFailureCallbackRequest,
     AiTerminalFailureCallbackResponse,
+    OutboundCallbackResponse,
+    OutboundRetryableFailureCallbackRequest,
+    OutboundSuccessCallbackRequest,
+    OutboundTerminalFailureCallbackRequest,
+)
+from ai_operations_automation.attempt_callbacks.outbound_service import (
+    OutboundAttemptCallbackService,
 )
 from ai_operations_automation.attempt_callbacks.parsing import (
     callback_idempotency_key,
@@ -68,9 +75,13 @@ def _raise_snapshot_error(status: int, snapshot: dict[str, Any]) -> None:
     )
 
 
+def _callback_schema(ai_model: type[BaseModel], outbound_model: type[BaseModel]) -> dict[str, Any]:
+    return {"oneOf": [_dereferenced_schema(ai_model), _dereferenced_schema(outbound_model)]}
+
+
 @router.post(
     "/api/v1/integration-attempts/{attempt_id}/callbacks/succeeded",
-    response_model=AiSuccessCallbackResponse,
+    response_model=AiSuccessCallbackResponse | OutboundCallbackResponse,
     responses={
         status: {"model": ErrorEnvelope} for status in (400, 401, 403, 404, 409, 415, 422, 500, 503)
     },
@@ -79,7 +90,11 @@ def _raise_snapshot_error(status: int, snapshot: dict[str, Any]) -> None:
         "requestBody": {
             "required": True,
             "content": {
-                "application/json": {"schema": _dereferenced_schema(AiSuccessCallbackRequest)}
+                "application/json": {
+                    "schema": _callback_schema(
+                        AiSuccessCallbackRequest, OutboundSuccessCallbackRequest
+                    )
+                }
             },
         },
     },
@@ -98,7 +113,12 @@ async def complete_ai_success_callback(
         parsed_attempt_id = uuid.UUID(attempt_id)
     except ValueError as exc:
         raise IntakeError(404, "ATTEMPT_NOT_FOUND", "The requested attempt was not found.") from exc
-    outcome = AiAttemptCallbackService(get_session_factory(request)).succeed(
+    service = (
+        OutboundAttemptCallbackService(get_session_factory(request))
+        if isinstance(command, OutboundSuccessCallbackRequest)
+        else AiAttemptCallbackService(get_session_factory(request))
+    )
+    outcome = service.succeed(
         attempt_id=parsed_attempt_id,
         command=command,
         raw_idempotency_key=raw_key,
@@ -108,7 +128,12 @@ async def complete_ai_success_callback(
         supplied_credential=supplied_credential,
     )
     _raise_snapshot_error(outcome.logical_http_status, outcome.safe_snapshot)
-    response = AiSuccessCallbackResponse(
+    response_type = (
+        OutboundCallbackResponse
+        if isinstance(command, OutboundSuccessCallbackRequest)
+        else AiSuccessCallbackResponse
+    )
+    response = response_type(
         correlation_id=correlation_id,
         command_id=outcome.command_id,
         **deepcopy(outcome.safe_snapshot),
@@ -122,7 +147,7 @@ async def complete_ai_success_callback(
 
 @router.post(
     "/api/v1/integration-attempts/{attempt_id}/callbacks/retryable-failure",
-    response_model=AiRetryableFailureCallbackResponse,
+    response_model=AiRetryableFailureCallbackResponse | OutboundCallbackResponse,
     responses={
         status: {"model": ErrorEnvelope} for status in (400, 401, 403, 404, 409, 415, 422, 500, 503)
     },
@@ -132,7 +157,10 @@ async def complete_ai_success_callback(
             "required": True,
             "content": {
                 "application/json": {
-                    "schema": _dereferenced_schema(AiRetryableFailureCallbackRequest)
+                    "schema": _callback_schema(
+                        AiRetryableFailureCallbackRequest,
+                        OutboundRetryableFailureCallbackRequest,
+                    )
                 }
             },
         },
@@ -152,7 +180,12 @@ async def complete_ai_retryable_failure_callback(
         parsed_attempt_id = uuid.UUID(attempt_id)
     except ValueError as exc:
         raise IntakeError(404, "ATTEMPT_NOT_FOUND", "The requested attempt was not found.") from exc
-    outcome = AiAttemptCallbackService(get_session_factory(request)).retryable_failure(
+    service = (
+        OutboundAttemptCallbackService(get_session_factory(request))
+        if isinstance(command, OutboundRetryableFailureCallbackRequest)
+        else AiAttemptCallbackService(get_session_factory(request))
+    )
+    outcome = service.retryable_failure(
         attempt_id=parsed_attempt_id,
         command=command,
         raw_idempotency_key=raw_key,
@@ -162,7 +195,12 @@ async def complete_ai_retryable_failure_callback(
         supplied_credential=supplied_credential,
     )
     _raise_snapshot_error(outcome.logical_http_status, outcome.safe_snapshot)
-    response = AiRetryableFailureCallbackResponse(
+    response_type = (
+        OutboundCallbackResponse
+        if isinstance(command, OutboundRetryableFailureCallbackRequest)
+        else AiRetryableFailureCallbackResponse
+    )
+    response = response_type(
         correlation_id=correlation_id,
         command_id=outcome.command_id,
         **deepcopy(outcome.safe_snapshot),
@@ -176,7 +214,7 @@ async def complete_ai_retryable_failure_callback(
 
 @router.post(
     "/api/v1/integration-attempts/{attempt_id}/callbacks/terminal-failure",
-    response_model=AiTerminalFailureCallbackResponse,
+    response_model=AiTerminalFailureCallbackResponse | OutboundCallbackResponse,
     responses={
         status: {"model": ErrorEnvelope} for status in (400, 401, 403, 404, 409, 415, 422, 500, 503)
     },
@@ -186,7 +224,10 @@ async def complete_ai_retryable_failure_callback(
             "required": True,
             "content": {
                 "application/json": {
-                    "schema": _dereferenced_schema(AiTerminalFailureCallbackRequest)
+                    "schema": _callback_schema(
+                        AiTerminalFailureCallbackRequest,
+                        OutboundTerminalFailureCallbackRequest,
+                    )
                 }
             },
         },
@@ -206,7 +247,12 @@ async def complete_ai_terminal_failure_callback(
         parsed_attempt_id = uuid.UUID(attempt_id)
     except ValueError as exc:
         raise IntakeError(404, "ATTEMPT_NOT_FOUND", "The requested attempt was not found.") from exc
-    outcome = AiAttemptCallbackService(get_session_factory(request)).terminal_failure(
+    service = (
+        OutboundAttemptCallbackService(get_session_factory(request))
+        if isinstance(command, OutboundTerminalFailureCallbackRequest)
+        else AiAttemptCallbackService(get_session_factory(request))
+    )
+    outcome = service.terminal_failure(
         attempt_id=parsed_attempt_id,
         command=command,
         raw_idempotency_key=raw_key,
@@ -216,7 +262,12 @@ async def complete_ai_terminal_failure_callback(
         supplied_credential=supplied_credential,
     )
     _raise_snapshot_error(outcome.logical_http_status, outcome.safe_snapshot)
-    response = AiTerminalFailureCallbackResponse(
+    response_type = (
+        OutboundCallbackResponse
+        if isinstance(command, OutboundTerminalFailureCallbackRequest)
+        else AiTerminalFailureCallbackResponse
+    )
+    response = response_type(
         correlation_id=correlation_id,
         command_id=outcome.command_id,
         **deepcopy(outcome.safe_snapshot),

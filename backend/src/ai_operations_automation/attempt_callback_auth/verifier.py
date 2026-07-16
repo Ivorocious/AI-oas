@@ -53,7 +53,7 @@ class AttemptCallbackCredentialVerifier:
         attempt_id: uuid.UUID,
         machine: AuthenticatedWorkflowService,
         supplied_credential: str,
-        expected_operation_kind: Literal["AIInterpretation"],
+        expected_operation_kind: Literal["AIInterpretation", "OutboundAction"],
     ) -> VerifiedAttemptCallbackContext:
         transaction = self.session.get_transaction()
         if (
@@ -95,7 +95,7 @@ class AttemptCallbackCredentialVerifier:
         attempt_id: uuid.UUID,
         machine: AuthenticatedWorkflowService,
         supplied_credential: str,
-        expected_operation_kind: Literal["AIInterpretation"],
+        expected_operation_kind: Literal["AIInterpretation", "OutboundAction"],
     ) -> VerifiedAttemptCallbackContext:
         attempt = self.session.scalar(
             select(IntegrationAttempt).where(IntegrationAttempt.id == attempt_id).with_for_update()
@@ -235,7 +235,7 @@ class AttemptCallbackCredentialVerifier:
             integration_attempt_version=attempt.version,
             logical_operation_id=operation.id,
             service_request_id=service_request.id,
-            operation_kind="AIInterpretation",
+            operation_kind=expected_operation_kind,
             callback_credential_id=current.id,
             callback_credential_version=current.credential_version,
             callback_credential_expires_at=current.expires_at,
@@ -250,16 +250,25 @@ class AttemptCallbackCredentialVerifier:
         operation: LogicalOperation,
         service_request: ServiceRequest,
         siblings: list[IntegrationAttempt],
-        expected_operation_kind: Literal["AIInterpretation"],
+        expected_operation_kind: Literal["AIInterpretation", "OutboundAction"],
     ) -> None:
         if (
             attempt.operation_kind != expected_operation_kind
             or operation.operation_kind != expected_operation_kind
             or attempt.operation_kind != operation.operation_kind
-            or attempt.adapter_name != operation.adapter_name
-            or attempt.adapter_version != operation.adapter_version
         ):
             _internal_error("attempt does not match frozen operation intent")
+        if expected_operation_kind == "AIInterpretation" and (
+            attempt.adapter_name != operation.adapter_name
+            or attempt.adapter_version != operation.adapter_version
+        ):
+            _internal_error("AI attempt does not match frozen operation intent")
+        if expected_operation_kind == "OutboundAction" and (
+            attempt.proposal_series_id != operation.proposal_series_id
+            or attempt.stable_outbound_key_scope != operation.outbound_key_scope
+            or attempt.stable_outbound_key_digest != operation.outbound_key_digest
+        ):
+            _internal_error("outbound attempt does not match frozen operation intent")
         if (
             operation.service_request_id != service_request.id
             or operation.service_request_id != attempt.service_request_id

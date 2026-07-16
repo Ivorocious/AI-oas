@@ -350,4 +350,6 @@ def test_private_route_is_not_in_production_or_openapi(command_client) -> None:
         "/api/v1/proposed-actions/{action_id}/commands/approve",
         "/api/v1/proposed-actions/{action_id}/commands/reject",
         "/api/v1/proposed-actions/{action_id}/commands/create-material-revision",
+        "/api/v1/proposed-actions/{action_id}/commands/start-outbound",
+        "/api/v1/proposed-actions/{action_id}/commands/retry-outbound",
     }

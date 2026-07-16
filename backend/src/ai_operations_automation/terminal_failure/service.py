@@ -17,8 +17,9 @@ from ai_operations_automation.command_idempotency.models import (
     NewCommandReservation,
 )
 from ai_operations_automation.command_idempotency.service import CommandIdempotencyService
-from ai_operations_automation.db.models.ai_execution import IntegrationAttempt
+from ai_operations_automation.db.models.ai_execution import IntegrationAttempt, LogicalOperation
 from ai_operations_automation.db.models.intake import ServiceRequest
+from ai_operations_automation.db.models.proposal import ApprovalDecision, ProposedAction
 from ai_operations_automation.event_writing import (
     AuditSpec,
     OutboxSpec,
@@ -139,11 +140,29 @@ class MarkTerminalFailureService:
                 "ATTEMPT_NOT_FOUND",
                 "The requested attempt was not found.",
             )
+        operation = session.scalar(
+            select(LogicalOperation)
+            .where(LogicalOperation.id == failed.logical_operation_id)
+            .with_for_update()
+        )
+        proposal = None
+        approval = None
+        if failed.operation_kind == "OutboundAction":
+            proposal = session.scalar(
+                select(ProposedAction)
+                .where(ProposedAction.id == failed.proposed_action_id)
+                .with_for_update()
+            )
+            approval = session.scalar(
+                select(ApprovalDecision)
+                .where(ApprovalDecision.id == failed.approval_decision_id)
+                .with_for_update()
+            )
         if (
             service_request.status != "RetryableFailure"
             or service_request.recovery_attempt_id != failed.id
             or failed.state != "RetryableFailure"
-            or failed.recovery_disposition != "RetrySameOperation"
+            or failed.recovery_disposition not in ("RetrySameOperation", "ReviseProposal")
             or failed.sanitized_error_code is None
         ):
             return self._guard(
@@ -152,6 +171,27 @@ class MarkTerminalFailureService:
                 409,
                 "INVALID_STATE_TRANSITION",
                 "The retryable work cannot be terminalized from its current state.",
+            )
+        if failed.operation_kind == "OutboundAction" and not (
+            operation is not None
+            and proposal is not None
+            and approval is not None
+            and command.expected_versions.proposed_action == proposal.version
+            and service_request.current_proposed_action_id == proposal.id
+            and proposal.state == "RetryableExecutionFailure"
+            and proposal.logical_operation_id == operation.id
+            and failed.proposed_action_id == proposal.id
+            and failed.proposal_number == proposal.proposal_number
+            and failed.proposal_payload_digest == proposal.payload_digest
+            and failed.approval_decision_id == approval.id == proposal.current_approval_id
+            and operation.succeeded_attempt_id is None
+        ):
+            return self._guard(
+                idempotency,
+                reservation,
+                409,
+                "INVALID_STATE_TRANSITION",
+                "The retryable outbound work cannot be terminalized from its current state.",
             )
         database_now = session.scalar(select(func.now()))
         if database_now is None or database_now.tzinfo is None or database_now.utcoffset() is None:
@@ -167,6 +207,10 @@ class MarkTerminalFailureService:
         service_request.current_queue = None
         service_request.recovery_target = None
         service_request.terminal_at = database_now
+        if proposal is not None:
+            proposal.state = "TerminalExecutionFailure"
+            proposal.terminal_at = database_now
+            proposal.version += 1
         session.flush()
         safe_evidence = {
             "service_request_id": str(service_request.id),
@@ -178,6 +222,13 @@ class MarkTerminalFailureService:
             "terminal_at": database_now.isoformat(),
             "rationale_hash": rationale_hash,
         }
+        if proposal is not None:
+            safe_evidence.update(
+                {
+                    "proposed_action_id": str(proposal.id),
+                    "proposal_state": proposal.state,
+                }
+            )
         write_audit_and_optional_outbox(
             session,
             AuditSpec(
@@ -196,6 +247,9 @@ class MarkTerminalFailureService:
             ),
             OutboxSpec(event_type="service_request.terminal_failure", payload=safe_evidence),
         )
+        versions = {"service_request": service_request.version}
+        if proposal is not None:
+            versions["proposed_action"] = proposal.version
         completed = idempotency.complete(
             reservation,
             200,
@@ -203,7 +257,7 @@ class MarkTerminalFailureService:
                 "result": {
                     key: value for key, value in safe_evidence.items() if key != "rationale_hash"
                 },
-                "versions": {"service_request": service_request.version},
+                "versions": versions,
             },
         )
         return MarkTerminalFailureOutcome(
