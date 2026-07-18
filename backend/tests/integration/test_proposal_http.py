@@ -277,4 +277,38 @@ def test_material_revision_http_response_is_closed_and_identifies_both_versions(
     assert result["replacement_proposed_action_id"] == result["proposed_action_id"]
     assert result["replacement_proposal_state"] == "Draft"
     assert result["recovery_cleared"] is False
-    assert len(create_app(Settings(_env_file=None)).openapi()["paths"]) == 21
+    assert len(create_app(Settings(_env_file=None)).openapi()["paths"]) == 32
+
+
+def test_query_approval_redaction_distinguishes_operations_from_broader_roles(engine) -> None:
+    ids = seed(engine)
+    grant(engine, ids["creator"], "OperationsAgent")
+    grant(engine, ids["approver"], "Administrator")
+    action_id, digest = _pending(engine, ids)
+    decision = client(engine).post(
+        f"/api/v1/proposed-actions/{action_id}/commands/reject",
+        headers=headers(ids["approver"], "query-redaction-reject"),
+        json={
+            "schema_version": "1.0",
+            "expected_versions": {"service_request": 3, "proposed_action": 2},
+            "expected_payload_digest": digest,
+            "rationale": "A bounded rationale retained only as integrity evidence.",
+        },
+    )
+    assert decision.status_code == 200
+    path = f"/api/v1/proposed-actions/{action_id}/approvals"
+    operations = client(engine).get(
+        path,
+        headers={"Authorization": f"Bearer {ids['creator']}"},
+    )
+    administrator = client(engine).get(
+        path,
+        headers={"Authorization": f"Bearer {ids['approver']}"},
+    )
+    assert operations.status_code == administrator.status_code == 200
+    operations_item = operations.json()["result"]["items"][0]
+    administrator_item = administrator.json()["result"]["items"][0]
+    assert "rationale_recorded" not in operations_item
+    assert administrator_item["rationale_recorded"] is True
+    assert "bounded rationale" not in (operations.text + administrator.text).lower()
+    assert "rationale_digest" not in (operations.text + administrator.text)

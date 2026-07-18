@@ -56,6 +56,7 @@ def query_service_request(
             active_references=ActiveReferences(
                 current_interpretation_id=request.current_interpretation_id,
                 current_routing_decision_id=request.current_routing_decision_id,
+                active_proposed_action_id=request.current_proposed_action_id,
             ),
         ),
     )

@@ -113,6 +113,11 @@ def test_openapi_documents_protected_query_and_resolves_local_references() -> No
 
     assert operation["security"]
     assert {"200", "400", "401", "403", "404", "500", "503"} <= set(operation["responses"])
+    query_paths = {
+        path for path, methods in schema["paths"].items() if "get" in methods and path != "/health"
+    }
+    assert len(query_paths) == 13
+    assert all(schema["paths"][path]["get"]["security"] for path in query_paths)
 
     def walk(value):
         if isinstance(value, dict):
@@ -154,6 +159,18 @@ def test_route_inventory_and_interpretation_reference_is_nullable_uuid() -> None
         "/health",
         "/api/v1/intake/service-requests",
         "/api/v1/service-requests/{request_id}",
+        "/api/v1/service-requests",
+        "/api/v1/inbound-deliveries/{delivery_id}",
+        "/api/v1/service-requests/{request_id}/timeline",
+        "/api/v1/service-requests/{request_id}/ai-interpretations",
+        "/api/v1/service-requests/{request_id}/duplicate-candidates",
+        "/api/v1/service-requests/{request_id}/routing-decisions",
+        "/api/v1/service-requests/{request_id}/proposed-actions",
+        "/api/v1/proposed-actions/{action_id}",
+        "/api/v1/proposed-actions/{action_id}/approvals",
+        "/api/v1/proposed-actions/{action_id}/integration-attempts",
+        "/api/v1/integration-attempts/{attempt_id}",
+        "/api/v1/audit-events",
         "/api/v1/service-requests/{request_id}/commands/start-ai-interpretation",
         "/api/v1/integration-attempts/{attempt_id}/commands/start",
         "/api/v1/integration-attempts/{attempt_id}/callbacks/succeeded",
@@ -167,7 +184,6 @@ def test_route_inventory_and_interpretation_reference_is_nullable_uuid() -> None
             "{candidate_id}/commands/resolve"
         ),
         "/api/v1/service-requests/{request_id}/commands/complete-human-review",
-        "/api/v1/service-requests/{request_id}/proposed-actions",
         "/api/v1/proposed-actions/{action_id}/draft",
         "/api/v1/proposed-actions/{action_id}/commands/submit-for-approval",
         "/api/v1/proposed-actions/{action_id}/commands/approve",

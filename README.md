@@ -6,7 +6,7 @@ The product remains configurable across service companies instead of assuming a 
 
 ## Status
 
-Phase 0 and Phase 1 are complete; Phase 2 is underway through Checkpoint 4. The executable backend now includes intake, human access, the bounded AI attempt lifecycle, deterministic triage/review, proposal approval, and mock outbound execution/recovery. Migration `0012_mock_outbound_execution_foundation` keeps the schema at 26 application tables and production OpenAPI exposes 21 paths. Outbound attempts bind the exact proposal, approval, series operation, assigned workflow identity, adapter, callback authorization, and backend-owned stable key; retry and uncertain-outcome handling remain bounded and transactional.
+Phase 0 and Phase 1 are complete. Phase 2 implementation is locally validated through the Checkpoint 5 candidate and remains pending final publication and Orchestration acceptance. Accepted Checkpoint 4 commit `4735ce9d78f2f912d7ad93060a1589f138183052` supplies mock outbound execution/recovery; Checkpoint 5 adds the thirteen protected query contracts and the coherent twelve-scenario PostgreSQL acceptance suite. Migration `0012_mock_outbound_execution_foundation` retains 26 application tables. OpenAPI contains 32 distinct path templates and 33 operations: `/health`, thirteen protected queries, and nineteen external mutation operations.
 
 - [Backend setup, startup, and validation](backend/README.md)
 
@@ -30,4 +30,4 @@ Phase 0 and Phase 1 are complete; Phase 2 is underway through Checkpoint 4. The 
 
 ## Implementation honesty
 
-No AI or outbound provider is invoked, and the mock outbound lifecycle never sends or claims to send email. AI callback success now derives backend-owned prompt, provider, model, and adapter identity from frozen persistence while accepting only the approved bounded callback evidence. Protected query expansion, final Phase 2 scenario acceptance, real integrations, n8n workflows, EventPublisher execution, frontend, and deployment remain unimplemented; these are not part of Checkpoint 4.
+No AI or outbound provider is invoked, and the mock outbound lifecycle never sends or claims to send email. AI callback success derives backend-owned prompt, provider, model, and adapter identity from frozen persistence while accepting only approved bounded evidence. The Checkpoint 5 candidate passed 584 offline, 375 PostgreSQL integration, and 959 unfiltered tests, including all twelve scenarios, but is still uncommitted and unpushed pending Orchestration acceptance. Real integrations, n8n workflows, EventPublisher execution, frontend, deployment, and all Phase 3 work remain deferred.

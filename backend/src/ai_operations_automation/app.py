@@ -16,6 +16,7 @@ from ai_operations_automation.api.health import router as health_router
 from ai_operations_automation.api.human_review import router as human_review_router
 from ai_operations_automation.api.intake import router as intake_router
 from ai_operations_automation.api.proposals import router as proposals_router
+from ai_operations_automation.api.protected_queries import router as protected_queries_router
 from ai_operations_automation.api.retry_ai import router as retry_ai_router
 from ai_operations_automation.api.retry_outbound import router as retry_outbound_router
 from ai_operations_automation.api.service_requests import router as service_requests_router
@@ -128,6 +129,7 @@ def create_app(
     application.include_router(intake_router)
     application.include_router(human_review_router)
     application.include_router(proposals_router)
+    application.include_router(protected_queries_router)
     application.include_router(retry_ai_router)
     application.include_router(retry_outbound_router)
     application.include_router(service_requests_router)

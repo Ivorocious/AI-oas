@@ -2,15 +2,16 @@
 
 ## Current phase
 
-**Phase 2 — Executable Foundation: underway.**
+**Phase 2 — Executable Foundation: implementation locally validated; publication and acceptance pending.**
 
-Phase 0 product definition and Phase 1 technical design are complete. Phase 2 has a runnable foundation, atomic intake, the complete bounded AI-attempt execution/recovery lifecycle, deterministic triage/duplicate/human review, and proposal approval. Checkpoint 4 mock outbound execution/recovery is an uncommitted implementation candidate under recovery: it is not completed, accepted, committed, pushed, or published. Phase 2 is not complete.
+Phase 0 product definition and Phase 1 technical design are complete. Accepted Checkpoint 4 commit `4735ce9d78f2f912d7ad93060a1589f138183052` includes mock outbound execution and recovery. The Checkpoint 5 candidate adds all thirteen protected query contracts, the focused outbound response-contract repair, and a coherent twelve-scenario PostgreSQL acceptance suite. It has passed the complete local gate but remains uncommitted, unpushed, unpublished, and pending Orchestration acceptance; Phase 2 is therefore not yet complete.
 
 ## Completed work
 
-- Checkpoint 4 candidate: migration `0012_mock_outbound_execution_foundation` is staged for recovery review. It is intended to add exact outbound proposal/approval/operation/key bindings, backend-owned stable key reuse, mock start/claim/success/failure/retry, proposal-defect revision, bounded uncertainty reconciliation, exact 15-minute unresolved terminalization, stale assessment, credential replacement, and manager/administrator terminal disposition. Historical validation claims are not bound to this candidate.
-- The candidate is intended to reconcile the AI success callback contract: prompt version, provider, model, and adapter name come from frozen backend intent; the closed callback supplies only approved bounded evidence. This remains subject to Checkpoint 4 recovery validation.
-- The candidate is intended to record simulated outbound evidence only. No real provider invocation, real email, n8n workflow, EventPublisher, or outbox publication-attempt persistence is intended or accepted.
+- Accepted Checkpoint 4 commit `4735ce9d78f2f912d7ad93060a1589f138183052` implements migration `0012_mock_outbound_execution_foundation`, exact outbound proposal/approval/operation/key bindings, stable-key retry, bounded uncertainty reconciliation, and simulated evidence only.
+- The Checkpoint 5 candidate implements thirteen protected queries with role-specific redaction, exact-assignment machine projections, concealed not-found behavior, and signed cursor pagination. It also adds three optional safe queue-transition response fields required by existing outbound service results.
+- Reproduced validation passed 74 focused query tests, all 12 scenarios, 584 offline tests, 375 PostgreSQL integration tests, and 959 unfiltered tests. Migration round trips, drift, Ruff, formatting, import, health, OpenAPI, security, route, and table gates passed.
+- No real provider invocation, real email, n8n workflow, EventPublisher execution, or outbox publication-attempt persistence was added.
 
 - Implemented migration `0011_proposal_approval_foundation`, bringing the application inventory to 26 tables. It adds the four approved proposal, contributor, frozen-exclusion, and exact-decision tables; generalizes logical operations without weakening AI constraints; and adds the request's same-request active-proposal reference.
 - Implemented six human-authenticated proposal commands for draft creation/editing, submission, approval, rejection, and material revision. The lifecycle preserves one series-owned outbound logical operation, deterministic closed-payload digests, immutable contributor carry-forward, frozen actor-UUID self-approval exclusions, exact decision binding, optimistic versions, command idempotency, and transactional audit/outbox evidence.
@@ -59,7 +60,7 @@ Phase 0 product definition and Phase 1 technical design are complete. Phase 2 ha
 
 ## Active task
 
-Checkpoint 4 is an uncommitted implementation candidate under recovery. It is not completed, accepted, committed, pushed, or published. Checkpoint 5 — Protected queries and final Phase 2 acceptance — has not started.
+Checkpoint 5 is locally validated and ready for Orchestration review. The exact candidate is still uncommitted and unpushed; final Phase 2 publication and acceptance remain pending.
 
 ## Blockers
 
@@ -122,15 +123,15 @@ The following matters will be resolved incrementally within focused Phase 2 and 
 
 ## Known limitations
 
-- The backend includes atomic intake, human authentication, protected request detail, 26-table persistence, WorkflowService HMAC/nonce authentication, command idempotency, the complete bounded AI attempt lifecycle, deterministic triage/review, and proposal approval. The mock-outbound implementation remains an uncommitted Checkpoint 4 candidate under recovery; `CompleteTriage` is trusted in-process functionality, and the candidate's stale/deadline assessment remains subject to recovery validation. No provider invocation, email execution, real integration, n8n workflow, publisher, frontend, or deployment exists.
+- The backend includes atomic intake, human authentication, thirteen protected queries, 26-table persistence, WorkflowService HMAC/nonce authentication, command idempotency, the complete bounded AI and mock-outbound lifecycles, deterministic triage/review, and proposal approval. `CompleteTriage` and stale/deadline assessment are trusted in-process functionality. No provider invocation, email execution, real integration, n8n workflow, publisher, frontend, or deployment exists.
 - Start AI generates one callback plaintext value in memory and issues it only after commit; only its SHA-256 hash and safe metadata are stored. No provider request/response body or real AI provider credential is created or stored.
-- The immutable demonstration failure policy, AI assessment/retry delays, AI stale boundaries, deterministic decision policy, and proposal approval lifecycle are executable. The mock-outbound candidate is intended to add outbound execution/reconciliation; real-world policy calibration remains unimplemented.
+- The immutable demonstration failure policy, AI/outbound assessment and retry delays, stale/reconciliation boundaries, deterministic decision policy, proposal approval, and mock-outbound execution are executable. Real-world policy calibration remains unimplemented.
 - No real email is sent; only a proposed mock adapter is approved for the MVP.
 - The design targets one demonstration organization, one primary intake path, and modest operational scale.
 - Billing, payments, multi-tenancy, mobile apps, full CRM behavior, autonomous communication, large-scale analytics, numerous real integrations, enterprise authentication, microservices, and Kubernetes remain outside scope.
 
 ## Next milestone
 
-**Checkpoint 4 — Mock outbound execution and recovery.**
+**Checkpoint 5 — Protected queries and final Phase 2 acceptance.**
 
-After Checkpoint 4 recovery validation and acceptance, Checkpoint 5 may add protected query expansion and the final twelve-scenario Phase 2 acceptance without weakening the AI or candidate mock-outbound lifecycle. Real provider/email execution, n8n, and EventPublisher remain deferred.
+Submit the fully staged Checkpoint 5 candidate for Orchestration acceptance, then publish it through the separately authorized commit/push workflow. Real provider/email execution, n8n, EventPublisher, frontend, deployment, and all Phase 3 work remain deferred.

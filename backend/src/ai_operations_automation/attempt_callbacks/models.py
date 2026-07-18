@@ -333,6 +333,7 @@ class OutboundCallbackResult(ClosedModel):
         "ActionPendingExecution", "Completed", "RetryableFailure", "TerminalFailure"
     ]
     service_request_queue: str | None = None
+    previous_service_request_queue: str | None = None
     failure_code: str | None = None
     recovery_disposition: str | None = None
     customer_side_effect: str | None = None

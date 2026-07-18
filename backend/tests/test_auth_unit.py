@@ -51,17 +51,19 @@ def test_valid_token_returns_only_subject_and_ignores_role_claim(key_material) -
 
 
 @pytest.mark.parametrize(
-    "claims",
-    [
-        {"exp": datetime.now(UTC) - timedelta(seconds=1)},
-        {"nbf": datetime.now(UTC) + timedelta(minutes=1)},
-        {"iss": "https://wrong.example/auth/v1"},
-        {"aud": "wrong"},
-        {"sub": ""},
-    ],
+    "case",
+    ("expired", "not-yet-valid", "wrong-issuer", "wrong-audience", "empty-subject"),
 )
-def test_invalid_registered_claims_are_rejected(key_material, claims) -> None:
+def test_invalid_registered_claims_are_rejected(key_material, case) -> None:
     private_key, jwk = key_material
+    now = datetime.now(UTC)
+    claims = {
+        "expired": {"exp": now - timedelta(seconds=1)},
+        "not-yet-valid": {"nbf": now + timedelta(minutes=1)},
+        "wrong-issuer": {"iss": "https://wrong.example/auth/v1"},
+        "wrong-audience": {"aud": "wrong"},
+        "empty-subject": {"sub": ""},
+    }[case]
     with pytest.raises(AuthenticationFailure):
         verifier(jwk).verify(token(private_key, **claims))
 

@@ -125,6 +125,23 @@ async def authenticated_retry_authority(
     return await authenticator.authenticate(request)
 
 
+async def authenticated_query_principal(
+    request: Request,
+    _correlation_id: Annotated[uuid.UUID, Depends(resolve_request_correlation)],
+) -> CommandAuthority:
+    """Resolve the only two external identities permitted at protected query edges."""
+    return await authenticated_retry_authority(request, _correlation_id)
+
+
+def require_human_query(
+    authority: Annotated[CommandAuthority, Depends(authenticated_query_principal)],
+) -> AuthenticatedHuman:
+    """Deny an authenticated WorkflowService where the query matrix is human-only."""
+    if not isinstance(authority, AuthenticatedHuman):
+        raise IntakeError(403, "FORBIDDEN", "The requested operation is not permitted.")
+    return authority
+
+
 def require_service_request_reader(
     human: Annotated[AuthenticatedHuman, Depends(authenticated_human)],
 ) -> AuthenticatedHuman:

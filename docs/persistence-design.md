@@ -1,10 +1,10 @@
 # Proposed Postgres Persistence Design
 
-> Candidate status: Checkpoint 4 is an uncommitted implementation candidate under recovery. It is not completed, accepted, committed, pushed, or published. Candidate migration `0012_mock_outbound_execution_foundation` is intended to generalize the existing logical-operation, attempt, and callback-credential representations for exact mock outbound execution without adding a table. The candidate is expected to retain 26 application tables. Its outbound attempts are intended to bind the exact request, series, proposal number/digest, approval decision, adapter, assigned workflow identity/environment, callback deadline, and stable operation key; AI-only fields remain separated by constraints.
+> Implementation status: accepted Checkpoint 4 commit `4735ce9d78f2f912d7ad93060a1589f138183052` includes migration `0012_mock_outbound_execution_foundation` and exact mock-outbound bindings without adding a table. The locally validated Checkpoint 5 candidate adds read projections only and retains 26 application tables and 27 physical public tables including `alembic_version`. It remains uncommitted, unpushed, and pending Orchestration acceptance.
 
 ## Status and scope
 
-This document defines the approved persistence design. AI start/claim/callback/retry/reconciliation use the implemented operation, attempt, credential, policy, command-idempotency, audit, and outbox structures. The Checkpoint 4 candidate is intended to extend those structures to mock outbound start/claim/callback/retry/reconciliation through migration `0012_mock_outbound_execution_foundation`. Callback authorization uses constant-time credential proof and durable consumed-credential replay binding. Protected-query refinements, controlled cleanup jobs, real provider execution, and EventPublisher publication-attempt persistence remain unimplemented.
+This document defines the approved persistence design. AI and mock-outbound start/claim/callback/retry/reconciliation use the implemented operation, attempt, credential, policy, command-idempotency, audit, and outbox structures through migration `0012_mock_outbound_execution_foundation`. Callback authorization uses constant-time credential proof and durable consumed-credential replay binding. Protected queries read those canonical structures without adding persistence. Controlled cleanup jobs, real provider execution, and EventPublisher publication-attempt persistence remain unimplemented; `outbox_publication_attempts` is intentionally absent.
 
 The names below are proposed relational names, not finalized SQL identifiers. Exact data types, lengths, encryption facilities, partitioning, and physical storage parameters remain migration-design decisions.
 
@@ -371,9 +371,9 @@ No legally authoritative retention duration is chosen here. Before implementatio
 
 Core requests, decision-policy versions, routing decisions, duplicate candidate observations, reviewed fact sets, proposal versions, approvals, logical operations, integration attempts, and canonical audit events are not hard-deleted in the MVP. Short-lived nonces, expired raw payload references, callback hashes, response snapshots, and archived outbox payload copies may be purged only by explicit controlled retention jobs that preserve required evidence and replay guarantees.
 
-## Proposed migration ordering
+## Migration ordering and retained future design
 
-Migrations `0001_intake_persistence` through `0003_human_access_foundation` implement intake and human access. Migration `0004_ai_execution_foundation` implements the AI-only logical-operation, attempt, callback-credential, and interpretation structures. The remaining safe future sequence is:
+Migrations `0001_intake_persistence` through `0012_mock_outbound_execution_foundation` are implemented and validated in order. They provide intake, human access, AI and mock-outbound execution, authentication/idempotency, deterministic triage, proposal approval, and exact recovery constraints while retaining 26 application tables. The ordering below remains the approved conceptual dependency order for later persistence evolution:
 
 Migration `0005_ai_execution_constraint_hardening` makes callback workflow scope nonblank and defers the replacement self-FK so one old-to-new hash-only credential transition can commit atomically. Same-attempt identity, exact next-version sequencing, deadline, authority, and plaintext issuance remain future FastAPI command guards; no replacement runtime is implemented.
 

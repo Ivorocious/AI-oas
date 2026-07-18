@@ -2,11 +2,11 @@
 
 ## Current checkpoint
 
-- Current checkpoint: Checkpoint 4 — Mock outbound execution and recovery — is complete after its final acceptance gate.
-- Published commits: implementation `619f2166c9e7e8c5e5c5ddae0e694cf7186069b8`; hardening `fa0d76580cfb3a258de0c3e5f7675eb1dc02697f`. Both commits are pushed.
+- Current checkpoint: Checkpoint 5 — Protected queries and final Phase 2 acceptance — is locally validated and pending Orchestration acceptance.
+- Accepted Checkpoint 4 commit: `4735ce9d78f2f912d7ad93060a1589f138183052`.
 - Branch: `phase-2-completion`.
-- Current branch head: `fa0d76580cfb3a258de0c3e5f7675eb1dc02697f`.
-- Remote tracking: `origin/phase-2-completion` is at `fa0d76580cfb3a258de0c3e5f7675eb1dc02697f`; divergence `0/0`.
+- Current branch head: `4735ce9d78f2f912d7ad93060a1589f138183052`; the Checkpoint 5 candidate is uncommitted.
+- Read-only remote identity: `origin/phase-2-completion` remains at `4735ce9d78f2f912d7ad93060a1589f138183052`.
 
 ## Verified baseline
 
@@ -52,7 +52,17 @@
 
 ## Remaining batches
 
-1. Complete protected queries and Phase 2 acceptance.
+No Phase 2 implementation batch remains after Checkpoint 5 acceptance. Commit, push, publication, and final Orchestration acceptance are still pending and require separate authority.
+
+## Completed Batch 5 local implementation and validation
+
+- Implemented all thirteen approved protected query operations with closed projections, role redaction, concealed resources, exact WorkflowService assignment, and signed principal/filter-bound cursor pagination.
+- Added the coherent isolated PostgreSQL twelve-scenario suite; all scenarios passed with replay, history, audit/outbox, authorization, redaction, and leakage assertions.
+- Added the focused outbound response-contract repair: optional safe prior queue on outbound callback results, and optional safe current/prior queues on retry-outbound results. Closed schemas continue to reject unrelated fields.
+- Validation passed: 6 direct response-contract tests, 74 focused query tests, 12 scenario tests, 584 offline tests, 375 PostgreSQL integration tests, and 959 unfiltered tests.
+- Migration `0012 → 0011 → 0012` and `0012 → base → 0012`, both drift checks, Ruff, 200-file format check, application import, `/health`, OpenAPI reference validation, test-route exclusion, and `git diff --check` passed.
+- Inventory reconciled to 32 distinct OpenAPI paths and 33 operations: 14 GET (one `/health` plus thirteen protected queries), 18 POST, and 1 PUT. There are nineteen external mutation operations/templates. The 21 documented intents comprise twenty external intents—submission and replacement submission share one route—plus internal non-HTTP `CompleteTriage`.
+- Schema inventory remains 26 application tables and 27 physical public tables including `alembic_version`; `outbox_publication_attempts` does not exist.
 
 ## Completed Batch 4 implementation
 
@@ -62,7 +72,7 @@
 - AI callback reconciliation completed: backend-owned prompt, provider, model, and adapter name are derived from frozen persistence instead of echoed by the success callback.
 - The adapter and callback evidence are explicitly mock/simulated. No real provider invocation, real email, n8n workflow, EventPublisher, or publication-attempt persistence was added.
 - Final acceptance gate: 566 offline and 348 PostgreSQL integration tests passed (914 collected); Alembic head/drift and both migration round trips passed; Ruff and format passed; application import, 26-table inventory, 21-path OpenAPI inventory, test-route exclusion, and `git diff --check` passed.
-- Checkpoint 5 remains protected query expansion and final twelve-scenario Phase 2 acceptance. Phase 2 is not complete.
+- Checkpoint 5 subsequently implemented protected query expansion and final twelve-scenario Phase 2 acceptance; its candidate is locally validated but not yet accepted or published, so Phase 2 remains pending.
 
 ## Completed Batch 3 implementation
 
@@ -77,11 +87,10 @@
 
 ## Known limitations
 
-- Batch 3 adds proposal approval only. No outbound attempt or callback credential is created for outbound work; no provider is invoked and no email is sent. Outbound start/callback/retry/reconciliation belongs to Batch 4, while protected query expansion and final scenario acceptance belong to Batch 5.
-- The outbound portion of the immutable failure policy is seeded for later exact use, but no outbound operation, reconciliation runtime, provider invocation, or real side effect exists.
-- PostgreSQL Compose was stopped after validation; the database volume was retained.
-- Runtime handoff note (2026-07-13): an earlier Codex escalation limit paused the run before staging. The project owner explicitly resumed execution; the complete validated Batch 1 worktree remained intact on `phase-2-completion`.
+- Checkpoint 5 remains uncommitted, unpushed, unpublished, and pending Orchestration acceptance.
+- Mock outbound records simulated evidence only. No provider invocation, real email, n8n workflow, EventPublisher execution, frontend, hosted deployment, or Phase 3 behavior exists.
+- Validation used a uniquely named throwaway PostgreSQL container with tmpfs storage; preserved Compose resources and volumes were not used.
 
 ## Next checkpoint
 
-Checkpoint 4 — Mock outbound execution and recovery. Batch 4 must reconcile the AI success-callback transport contract before generalizing callbacks to `OutboundAction`; the executable AI success request currently requires echoed prompt/provider/model/adapter identity beyond the shorter API-contract summary.
+Project Orchestration should review the exact staged Checkpoint 5 candidate. Commit, push, and Phase 3 require separate authorization.

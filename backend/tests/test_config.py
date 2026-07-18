@@ -66,3 +66,14 @@ def test_unknown_dotenv_configuration_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(ValidationError):
         Settings(_env_file=env_file)
+
+
+def test_protected_query_cursor_key_has_no_default_and_requires_32_bytes() -> None:
+    assert Settings(_env_file=None).protected_query_cursor_signing_key is None
+    with pytest.raises(ValidationError):
+        Settings(protected_query_cursor_signing_key="synthetic-short-key", _env_file=None)
+    configured = Settings(
+        protected_query_cursor_signing_key="synthetic-query-cursor-key-for-tests-only-0001",
+        _env_file=None,
+    )
+    assert "tests-only-0001" not in repr(configured.protected_query_cursor_signing_key)

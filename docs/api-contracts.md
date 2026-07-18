@@ -1,6 +1,6 @@
 # Proposed API Contracts
 
-> Implementation status: Checkpoint 4 exposes 21 production paths, including HMAC-authenticated `start-outbound` and mixed-authority `retry-outbound`, and generalizes existing attempt start, credential replacement, and callback routes for closed `OutboundAction` bodies. AI success callbacks no longer echo backend-owned prompt/provider/model/adapter-name identity; FastAPI derives it from frozen persistence and validates the remaining bounded evidence. Proposal query routes remain deferred and no provider is invoked.
+> Implementation status: accepted Checkpoint 4 commit `4735ce9d78f2f912d7ad93060a1589f138183052` implements mock outbound execution/recovery. The locally validated Checkpoint 5 candidate implements all thirteen protected queries and the twelve-scenario acceptance suite; it remains uncommitted, unpushed, and pending Orchestration acceptance. OpenAPI contains 32 distinct paths and 33 operations: 14 GET, 18 POST, and 1 PUT. No provider is invoked.
 
 ## Status and scope
 
@@ -88,7 +88,7 @@ Command-specific results add identifiers, lifecycle summaries, or attempt refere
 
 `POST /api/v1/intake/service-requests`
 
-Required transport inputs are `Content-Type: application/json`, `Idempotency-Key`, and a JSON body. `X-Correlation-ID` is optional. The implemented intake and service-request detail endpoints use executable closed schemas. Exact schemas for unimplemented commands and queries remain deferred.
+Required transport inputs are `Content-Type: application/json`, `Idempotency-Key`, and a JSON body. `X-Correlation-ID` is optional. All implemented Phase 2 commands and queries use executable closed schemas. Any future Phase 3 command requires a separately approved contract.
 
 ### Outcomes
 
@@ -175,7 +175,7 @@ Callbacks report evidence for backend-created attempts. They are commands, not d
 
 | Intent and endpoint | Request information and expected versions | Guard and authority | Idempotency and response |
 | --- | --- | --- | --- |
-| **Implemented for AI:** Claim and start attempt — `POST /api/v1/integration-attempts/{attempt_id}/commands/start` | Closed `1.0` body with positive expected `integration_attempt` version and empty `command` | HMAC-authenticated assigned `WorkflowService`; exact AI attempt is `Pending`; owner request/input and active callback context remain valid; no operation success or contradictory sibling | Command key required; `200 OK` first/replay with request, operation, attempt, adapter, PostgreSQL start time, and resulting attempt version; no callback credential or provider call |
+| **Implemented for AI and mock outbound:** Claim and start attempt — `POST /api/v1/integration-attempts/{attempt_id}/commands/start` | Closed `1.0` body with positive expected `integration_attempt` version and empty `command` | HMAC-authenticated assigned `WorkflowService`; exact attempt is `Pending`; owner request/input and active callback context remain valid; no operation success or contradictory sibling | Command key required; `200 OK` first/replay with request, operation, attempt, adapter, PostgreSQL start time, and resulting attempt version; no callback credential or provider call |
 | Replace callback credential — `POST /api/v1/integration-attempts/{attempt_id}/commands/replace-callback-credential` | Expected `integration_attempt` and active callback-credential version; no lifecycle, provider, owner, or credential-scope fields | HMAC-authenticated `WorkflowService` assigned to this exact attempt/environment; attempt `Pending` or `Running`; fixed callback-authorization deadline unexpired; expected active credential version exact | New command key required; first `200 OK` returns next credential version/expiry and plaintext once; exact replay returns safe `AlreadyIssued` receipt without plaintext; concurrent stale version conflicts |
 | Record success — `POST /api/v1/integration-attempts/{attempt_id}/callbacks/succeeded` | Expected `integration_attempt`; result schema/adapter version, provider correlation, sanitized evidence; validated structured interpretation for AI or simulated result for mock outbound | Valid `WorkflowService` HMAC identity and exact attempt-scoped callback credential; attempt is `Running`; no contradictory terminal result | Callback command key required; duplicate same result returns `200`; first result returns `200 OK` with attempt and backend-derived owner states/versions |
 | Record retryable failure — `POST /api/v1/integration-attempts/{attempt_id}/callbacks/retryable-failure` | Expected `integration_attempt`; stable failure classification/code, sanitized evidence, adapter version | Same `WorkflowService` HMAC and exact attempt-scoped credential; same attempt ownership/current-state guards; backend owns retry eligibility and parent transition | Same-result replay safe; `200 OK` with attempt `RetryableFailure` and backend-derived request/proposal summary |
@@ -232,7 +232,7 @@ All scenarios use meaningful commands; none requires a generic category, status,
 
 Failure callbacks submit only sanitized evidence. FastAPI derives the final attempt/request/proposal states, recovery disposition, ordinal, maximum and remaining attempts, `next_eligible_at`, and authorized reconciliation metadata. `retry-ai` and `retry-outbound` enforce the complete eligibility predicate in the [failure and recovery policy](failure-and-recovery-policy.md); `mark-terminal-failure` remains manager/administrator-only with rationale. Attempt queries expose safe policy/recovery metadata and current aggregate versions, never raw provider errors.
 
-No route is added: the catalog remains 21 command intents over 20 normalized mutation templates and 13 queries. New stable conflicts are `RETRY_NOT_YET_ELIGIBLE`, `RETRY_BUDGET_EXHAUSTED`, `RECONCILIATION_REQUIRED`, `OUTBOUND_OUTCOME_UNRESOLVED`, `RECOVERY_DISPOSITION_CONFLICT`, and `FAILURE_POLICY_VERSION_CONFLICT`.
+The catalog contains 21 command intents over 20 normalized mutation templates: twenty external intents share nineteen HTTP mutation templates because initial and replacement submission use the same route, while internal non-HTTP `CompleteTriage` supplies the twentieth normalized template. OpenAPI contains those nineteen external mutation operations, thirteen protected queries, and `/health`; `/api/v1/service-requests/{request_id}/proposed-actions` supports both GET and POST. Outbound callback responses optionally include `previous_service_request_queue` when canonical queue transition evidence exists. Retry-outbound responses include optional `service_request_queue` and `previous_service_request_queue`; these fields contain backend-derived canonical queue names only. Stable conflicts include `RETRY_NOT_YET_ELIGIBLE`, `RETRY_BUDGET_EXHAUSTED`, `RECONCILIATION_REQUIRED`, `OUTBOUND_OUTCOME_UNRESOLVED`, `RECOVERY_DISPOSITION_CONFLICT`, and `FAILURE_POLICY_VERSION_CONFLICT`.
 
 ### Error envelope
 

@@ -92,19 +92,19 @@ Schema-bearing batches also downgrade to the preceding head, re-upgrade, downgra
 | 1 — AI execution lifecycle | Complete and pushed at `c65ca6f1bbb2b3c0b1c0a3841cdc348a5a7bbea4` | `0009_failure_recovery_foundation` | 17 | 431 offline and 285 PostgreSQL integration tests passed; migration round trips, Alembic drift, Ruff, format, import, health, and OpenAPI checks passed. |
 | 2 — Triage and review | Complete and pushed at `65bcc8d70e158940b868792eba3e8c6fd9707400` | `0010_deterministic_triage_foundation` | 22 | 564 offline and 316 PostgreSQL integration tests passed; migration round trips, Alembic drift checks, Ruff, 165-file format check, import, health, 13-route OpenAPI inventory, policy identity, and diff checks passed. |
 | 3 — Proposal and approval | Complete and pushed: implementation `619f2166c9e7e8c5e5c5ddae0e694cf7186069b8`; hardening `fa0d76580cfb3a258de0c3e5f7675eb1dc02697f` | `0011_proposal_approval_foundation` | 26 | Final validation: 566 offline and 345 PostgreSQL integration tests passed (911 collected); exact decision replay identity, truthful revision evidence, independent-session concurrency, rollback, HTTP contracts, and redaction passed without schema or route changes. |
-| 4 — Mock outbound | Complete | `0012_mock_outbound_execution_foundation` | 26 | Mock start/claim/callback/retry/reconciliation lifecycle, AI callback reconciliation, 21 production paths, migration round trips, and final gate passed. |
-| 5 — Queries and acceptance | Not started | None expected | 26 | Pending. |
+| 4 — Mock outbound | Complete and accepted at `4735ce9d78f2f912d7ad93060a1589f138183052` | `0012_mock_outbound_execution_foundation` | 26 | Mock start/claim/callback/retry/reconciliation lifecycle, AI callback reconciliation, migration round trips, and final gate passed. |
+| 5 — Queries and acceptance | Locally validated candidate; uncommitted and unpushed pending Orchestration acceptance | None | 26 | 74 focused query, 12 scenario, 584 offline, 375 PostgreSQL integration, and 959 unfiltered tests passed; migration, OpenAPI, route, table, security, Ruff, format, import, health, and diff gates passed. |
 
 ## Final acceptance strategy
 
-Checkpoint 4 reconciled the AI success-callback transport contract and implemented the mock outbound lifecycle. Checkpoint 5 remains protected queries and the final twelve-scenario Phase 2 acceptance.
+Checkpoint 4 reconciled the AI success-callback transport contract and implemented the mock outbound lifecycle. The Checkpoint 5 candidate implements protected queries and the final twelve-scenario Phase 2 acceptance; final publication and Orchestration acceptance remain pending.
 
 - Run dependency sync, offline tests, integration tests, and the unfiltered full suite.
 - Run Ruff lint/format, application import, `/health`, OpenAPI reference validation, production-route inventory, and test-route exclusion.
 - Exercise the complete migration lifecycle through the approved base head and base; verify exactly 26 application tables and no `outbox_publication_attempts`.
 - Search for callback plaintext/hash leakage, raw idempotency keys, HMAC secrets/signatures, unrestricted provider payloads, SMTP/real-email code, provider invocation, generic lifecycle patches, and AI-written canonical routing fields.
 - Verify every external mutation's authentication, authorization, idempotency, expected-version, state, concurrency, rollback, audit/outbox, and redaction coverage.
-- Remove Compose resources, verify the five checkpoint commits, branch divergence `0/0`, clean worktree, and unchanged `main`/`origin/main`.
+- Remove only task-created validation resources, verify the accepted Checkpoint 4 commit and read-only remote identity, review the exact staged Checkpoint 5 candidate, and leave commit/push to the separately authorized publication step.
 
 ## Known risks and mitigations
 

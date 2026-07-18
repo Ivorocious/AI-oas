@@ -1,10 +1,10 @@
 # Backend executable foundation
 
-This directory contains the runnable FastAPI foundation, `GET /health`, PostgreSQL/SQLAlchemy/Alembic persistence, atomic public intake, a human-authenticated service-request detail query, the complete bounded AI-attempt lifecycle, deterministic triage/review, proposal approval, and a Checkpoint 4 mock-outbound implementation candidate under recovery. The candidate is uncommitted, unaccepted, unpushed, and unpublished; reported validation is not bound to an immutable candidate. Migration head `0012_mock_outbound_execution_foundation` is expected to retain 26 application tables and the candidate is expected to expose 21 production OpenAPI paths.
+This directory contains the runnable FastAPI foundation, `GET /health`, PostgreSQL/SQLAlchemy/Alembic persistence, atomic public intake, the complete bounded AI-attempt lifecycle, deterministic triage/review, proposal approval, accepted Checkpoint 4 mock-outbound execution/recovery, and the Checkpoint 5 protected query candidate. Checkpoint 4 is recorded at commit `4735ce9d78f2f912d7ad93060a1589f138183052`. The locally validated Checkpoint 5 candidate remains uncommitted, unpushed, unpublished, and pending Orchestration acceptance. Migration head `0012_mock_outbound_execution_foundation` retains 26 application tables; OpenAPI exposes 32 path templates and 33 operations.
 
 It exposes `POST /api/v1/service-requests/{request_id}/commands/start-ai-interpretation` to an HMAC-authenticated `WorkflowService`. The command creates one logical operation, one `Pending` attempt, hash-only callback authorization, safe audit evidence, and one pending outbox row atomically. Claim/start and result callbacks change canonical state, but FastAPI never invokes an AI provider.
 
-The candidate's HMAC-authenticated `start-outbound` command creates a mock-only outbound attempt for an exactly approved proposal. `retry-outbound`, generalized claim/start and callbacks, credential replacement, stale assessment, terminal disposition, and 15-minute uncertainty reconciliation are intended to reuse the same stable operation key and three-attempt budget. Callback success records simulated `Applied` evidence only: there is no provider invocation, SMTP delivery, real email, n8n workflow, or EventPublisher.
+The HMAC-authenticated `start-outbound` command creates a mock-only outbound attempt for an exactly approved proposal. `retry-outbound`, generalized claim/start and callbacks, credential replacement, stale assessment, terminal disposition, and 15-minute uncertainty reconciliation reuse the same stable operation key and three-attempt budget. Callback success records simulated `Applied` evidence only: there is no provider invocation, SMTP delivery, real email, n8n workflow, or EventPublisher execution.
 
 ## First setup
 
@@ -63,6 +63,8 @@ uv run ruff format --check .
 ```
 
 Integration tests require the Compose PostgreSQL service. Foundation tests do not.
+
+The reproduced Checkpoint 5 gate passed 584 offline tests, 375 PostgreSQL integration tests, and 959 unfiltered tests. The isolated twelve-scenario suite passed 12/12; migration `0012 → 0011 → 0012` and `0012 → base → 0012` round trips and both drift checks passed. The application has 26 modeled tables and 27 physical public tables including `alembic_version`, with no `outbox_publication_attempts`.
 
 ## Start AI interpretation
 
@@ -141,4 +143,4 @@ Reusable non-intake command idempotency accepts exactly one 8–128-character vi
 
 Callback-command authorization metadata is stored independently from secret-delivery metadata. The authorization binding identifies the credential that proved authority for a callback command; the secret-delivery fields identify a credential whose plaintext was issued once. Either or both groups may be present on a completed command record without placing plaintext in the safe response snapshot.
 
-The public intake endpoint and protected request detail remain as documented. Start AI and the mock-outbound candidate begin attempts `Pending`; claim/start moves the exact attempt to `Running`; closed callbacks are intended to complete success or backend-derived recovery. Deterministic triage, duplicate resolution, bounded human-review recalculation, and proposal approval remain implemented without invoking a provider. The mock-outbound implementation is an uncommitted Checkpoint 4 candidate under recovery, not an accepted or published capability. Real integrations, n8n workflows, the outbox publisher, protected query expansion, final Phase 2 acceptance, and the frontend do not exist yet. `/health` remains database-, JWKS-, policy-, generator-, secret-resolver-, callback-verifier-, and command-independent.
+Public intake and all thirteen protected query operations are implemented as documented. Start AI and mock outbound begin attempts `Pending`; claim/start moves only the exact assigned attempt to `Running`; closed callbacks complete success or backend-derived recovery. Outbound callback results may include the safe prior canonical queue when a transition occurred, and retry-outbound returns both safe current and prior queue names; both remain closed against unrelated fields. Real integrations, n8n workflows, the outbox publisher, frontend, deployment, and Phase 3 behavior do not exist. `/health` remains database-, JWKS-, policy-, generator-, secret-resolver-, callback-verifier-, and command-independent.

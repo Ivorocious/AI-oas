@@ -42,6 +42,8 @@ class RetryOutboundResult(ClosedModel):
     attempt_state: Literal["Pending"]
     proposal_state: Literal["PendingExecution"]
     service_request_status: Literal["ActionPendingExecution"]
+    service_request_queue: str | None = None
+    previous_service_request_queue: str | None = None
     stable_outbound_key_scope: Literal["mock-outbound-operation-v1"]
     stable_outbound_key_reference: str = Field(min_length=1, max_length=200)
     callback_credential_id: uuid.UUID
