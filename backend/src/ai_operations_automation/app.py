@@ -28,6 +28,14 @@ from ai_operations_automation.api.terminal_failure import router as terminal_fai
 from ai_operations_automation.auth.verifier import SupabaseJwtVerifier, url_jwks_loader
 from ai_operations_automation.config import Settings, get_settings
 from ai_operations_automation.db import create_database_engine, create_session_factory
+from ai_operations_automation.demo_auth import (
+    DEMO_AUDIENCE,
+    DEMO_ISSUER,
+    DemoIssuer,
+)
+from ai_operations_automation.demo_auth import (
+    router as demo_auth_router,
+)
 from ai_operations_automation.duplicate_resolution.service import ResolveDuplicateService
 from ai_operations_automation.human_review.service import CompleteHumanReviewService
 from ai_operations_automation.intake.errors import IntakeError
@@ -59,12 +67,22 @@ def create_app(
         session_factory = create_session_factory(engine)
         application.state.database_engine = engine
     application.state.session_factory = session_factory
-    application.state.jwt_verifier = jwt_verifier or SupabaseJwtVerifier(
-        issuer=str(active_settings.supabase_issuer),
-        audience=active_settings.supabase_audience,
-        loader=url_jwks_loader(str(active_settings.supabase_jwks_url)),
-        cache_seconds=active_settings.jwks_cache_seconds,
-    )
+    if active_settings.demo_auth_enabled:
+        application.state.demo_issuer = DemoIssuer()
+        application.state.jwt_verifier = jwt_verifier or SupabaseJwtVerifier(
+            issuer=DEMO_ISSUER,
+            audience=DEMO_AUDIENCE,
+            loader=application.state.demo_issuer.jwks,
+            cache_seconds=active_settings.jwks_cache_seconds,
+        )
+        application.include_router(demo_auth_router)
+    else:
+        application.state.jwt_verifier = jwt_verifier or SupabaseJwtVerifier(
+            issuer=str(active_settings.supabase_issuer),
+            audience=active_settings.supabase_audience,
+            loader=url_jwks_loader(str(active_settings.supabase_jwks_url)),
+            cache_seconds=active_settings.jwks_cache_seconds,
+        )
     application.state.machine_secret_resolver = (
         machine_secret_resolver or UnavailableMachineSecretResolver()
     )

@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     ai_adapter_version: str = Field(default="1.0", max_length=100)
     ai_callback_authorization_seconds: int = Field(default=1800, ge=300, le=86400)
     protected_query_cursor_signing_key: SecretStr | None = Field(default=None)
+    demo_auth_enabled: bool = False
 
     @field_validator("app_name")
     @classmethod
@@ -88,6 +89,14 @@ class Settings(BaseSettings):
     def cursor_key_must_be_safe_when_configured(cls, value: SecretStr | None) -> SecretStr | None:
         if value is not None and len(value.get_secret_value().encode()) < 32:
             raise ValueError("protected query cursor signing key must be at least 32 bytes")
+        return value
+
+    @field_validator("demo_auth_enabled")
+    @classmethod
+    def demo_auth_is_local_only(cls, value: bool, info) -> bool:
+        """Prevent the portfolio-only issuer from being enabled outside local mode."""
+        if value and info.data.get("app_environment") != "local":
+            raise ValueError("demo auth is permitted only when app_environment is local")
         return value
 
 

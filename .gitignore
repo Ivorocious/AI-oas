@@ -9,6 +9,8 @@ __pycache__/
 # Test, lint, and coverage artifacts
 .pytest_cache/
 .ruff_cache/
+frontend/node_modules/
+frontend/dist/
 .coverage
 .coverage.*
 coverage.xml

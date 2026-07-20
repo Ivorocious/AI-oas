@@ -1,0 +1,93 @@
+:root {
+  font-family: Inter, system-ui, sans-serif;
+  color: #e8edf7;
+  background: #101827;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 1120px;
+  margin: auto;
+  padding: 28px;
+}
+header {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  border-bottom: 1px solid #334155;
+  padding-bottom: 20px;
+}
+header a {
+  color: #fff;
+  font-weight: 750;
+  text-decoration: none;
+}
+header span {
+  color: #aab8ce;
+  flex: 1;
+  font-size: 0.9rem;
+}
+button {
+  border: 0;
+  border-radius: 8px;
+  background: #62d6b6;
+  color: #05251e;
+  padding: 10px 14px;
+  font-weight: 700;
+  cursor: pointer;
+  margin: 4px;
+}
+.secondary {
+  background: #26344b;
+  color: #e8edf7;
+}
+.sign-in {
+  max-width: 520px;
+  margin: 12vh auto;
+}
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #62d6b6;
+  font-size: 0.75rem;
+}
+.cards,
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+.card,
+article {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #172235;
+  border: 1px solid #334155;
+  padding: 18px;
+  border-radius: 12px;
+  color: #dce7f8;
+  text-decoration: none;
+}
+article {
+  margin: 14px 0;
+}
+h1 {
+  font-size: 2rem;
+}
+h2 {
+  margin: 0;
+  font-size: 1.08rem;
+}
+[role="status"] {
+  background: #123d37;
+  padding: 12px;
+  border-radius: 8px;
+}
+[role="alert"] {
+  color: #fda4af;
+}
