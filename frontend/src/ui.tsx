@@ -1,4 +1,8 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   Link,
   Navigate,
@@ -7,9 +11,10 @@ import {
   useNavigate,
   useParams,
 } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   api,
+  ApiError,
   idempotencyKey,
   selectedDemoPersona,
   signIn,
@@ -42,10 +47,37 @@ type Approval = {
   payload_digest: string;
 };
 type Envelope<T> = { result: T };
+type Page = { next_cursor: string | null };
+type Paged<T> = T & { page: Page };
 const get =
   <T,>(path: string) =>
   () =>
     api<Envelope<T>>(path).then((value) => value.result);
+const getPage =
+  <T,>(path: string, cursor: string | null) =>
+  () => {
+    const url = new URL(path, window.location.origin);
+    url.searchParams.set("limit", "1");
+    if (cursor) url.searchParams.set("cursor", cursor);
+    return api<Envelope<Paged<T>>>(`${url.pathname}${url.search}`).then(
+      (value) => value.result,
+    );
+  };
+
+function safeError(error: unknown, fallback: string) {
+  if (!(error instanceof ApiError)) return fallback;
+  if (error.status === 401) return "Your session expired. Sign in again.";
+  if (error.status === 404) return "This protected item is unavailable.";
+  if (error.status === 403)
+    return "You are not permitted to perform this action.";
+  if (error.status === 409)
+    return "This item changed or was already resolved. Refresh to see the authoritative state.";
+  if (error.status === 422 || error.code === "INVALID_REJECTION_RATIONALE")
+    return "Enter a rejection rationale of at least 20 characters.";
+  if (error.retryable)
+    return "The service is temporarily unavailable. Try again.";
+  return error.message || fallback;
+}
 
 function Shell({
   children,
@@ -104,11 +136,15 @@ function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
 }
 
 function Queue({ onSignOut }: { onSignOut: () => void }) {
-  const query = useQuery({
-    queryKey: ["queue"],
-    queryFn: get<{ items: RequestItem[] }>(
-      "/api/v1/service-requests?status=AwaitingApproval",
-    ),
+  const query = useInfiniteQuery({
+    queryKey: ["queue", "AwaitingApproval"],
+    queryFn: ({ pageParam }) =>
+      getPage<{ items: RequestItem[] }>(
+        "/api/v1/service-requests?status=AwaitingApproval",
+        pageParam,
+      )(),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.page.next_cursor ?? undefined,
   });
   if (query.isLoading)
     return (
@@ -119,19 +155,24 @@ function Queue({ onSignOut }: { onSignOut: () => void }) {
   if (query.isError)
     return (
       <Shell onSignOut={onSignOut}>
-        <p role="alert">Unable to load the protected queue.</p>
+        <p role="alert">
+          {safeError(query.error, "Unable to load the protected queue.")}
+        </p>
+        <button onClick={() => query.refetch()}>Retry queue</button>
       </Shell>
     );
+  const items = query.data?.pages.flatMap((page) => page.items) ?? [];
+  const hasNext = Boolean(query.hasNextPage);
   return (
     <Shell onSignOut={onSignOut}>
       <section>
         <p className="eyebrow">Authoritative queue</p>
         <h1>Awaiting approval</h1>
-        {query.data!.items.length === 0 ? (
+        {items.length === 0 ? (
           <p>No pending approvals.</p>
         ) : (
           <div className="cards">
-            {query.data!.items.map((item) => (
+            {items.map((item) => (
               <Link className="card" to={`/requests/${item.id}`} key={item.id}>
                 <strong>{item.status}</strong>
                 <span>Priority: {item.priority ?? "—"}</span>
@@ -140,6 +181,19 @@ function Queue({ onSignOut }: { onSignOut: () => void }) {
               </Link>
             ))}
           </div>
+        )}
+        <button
+          disabled={!hasNext || query.isFetchingNextPage}
+          onClick={() => query.fetchNextPage()}
+        >
+          {query.isFetchingNextPage
+            ? "Loading more approvals…"
+            : hasNext
+              ? "Load more approvals"
+              : "All approvals loaded"}
+        </button>
+        {query.isFetching && !query.isFetchingNextPage && (
+          <p role="status">Refreshing protected queue…</p>
         )}
       </section>
     </Shell>
@@ -150,6 +204,8 @@ function Detail({ onSignOut }: { onSignOut: () => void }) {
   const { requestId } = useParams();
   const client = useQueryClient();
   const [notice, setNotice] = useState("");
+  const [rationale, setRationale] = useState("");
+  const [deciding, setDeciding] = useState(false);
   const request = useQuery({
     queryKey: ["request", requestId],
     queryFn: get<RequestDetail>(`/api/v1/service-requests/${requestId}`),
@@ -204,14 +260,11 @@ function Detail({ onSignOut }: { onSignOut: () => void }) {
   const decide = async (decision: "approve" | "reject") => {
     if (!proposal || !request.data) return;
     const serviceRequest = request.data.service_request;
-    const rationale =
-      decision === "reject"
-        ? window.prompt("Required rejection rationale (20+ characters)")
-        : undefined;
-    if (decision === "reject" && (!rationale || rationale.length < 20)) {
+    if (decision === "reject" && rationale.trim().length < 20) {
       setNotice("A rejection rationale of at least 20 characters is required.");
       return;
     }
+    setDeciding(true);
     try {
       await api(
         `/api/v1/proposed-actions/${proposal.id}/commands/${decision}`,
@@ -228,17 +281,22 @@ function Detail({ onSignOut }: { onSignOut: () => void }) {
               proposed_action: proposal.version,
             },
             expected_payload_digest: proposal.payload_digest,
-            ...(rationale ? { rationale } : {}),
+            ...(decision === "reject" ? { rationale: rationale.trim() } : {}),
           }),
         },
       );
       await client.invalidateQueries();
+      setRationale("");
       setNotice(
         `${decision === "approve" ? "Approved" : "Rejected"}. Refetched authoritative state and audit evidence.`,
       );
     } catch (issue) {
-      const error = issue as Error & { code?: string };
-      setNotice(`${error.code ?? "ERROR"}: ${error.message}`);
+      setNotice(
+        safeError(issue, "The decision could not be completed safely."),
+      );
+      await client.invalidateQueries({ queryKey: ["request", requestId] });
+    } finally {
+      setDeciding(false);
     }
   };
   if (request.isLoading || proposals.isLoading)
@@ -250,7 +308,20 @@ function Detail({ onSignOut }: { onSignOut: () => void }) {
   if (request.isError || proposals.isError)
     return (
       <Shell onSignOut={onSignOut}>
-        <p role="alert">This protected request could not be loaded.</p>
+        <p role="alert">
+          {safeError(
+            request.error ?? proposals.error,
+            "This protected request could not be loaded.",
+          )}
+        </p>
+        <button
+          onClick={() => {
+            void request.refetch();
+            void proposals.refetch();
+          }}
+        >
+          Retry request
+        </button>
       </Shell>
     );
   return (
@@ -279,10 +350,26 @@ function Detail({ onSignOut }: { onSignOut: () => void }) {
                 </p>
                 {showDecisionControls ? (
                   <>
-                    <button onClick={() => decide("approve")}>
+                    <button
+                      disabled={deciding}
+                      onClick={() => decide("approve")}
+                    >
                       Approve exact proposal
                     </button>
+                    <label>
+                      Rejection rationale
+                      <textarea
+                        value={rationale}
+                        onChange={(event) => setRationale(event.target.value)}
+                        minLength={20}
+                        aria-describedby="rationale-help"
+                      />
+                    </label>
+                    <small id="rationale-help">
+                      Required for rejection (20 characters minimum).
+                    </small>
                     <button
+                      disabled={deciding}
                       className="secondary"
                       onClick={() => decide("reject")}
                     >
@@ -310,7 +397,16 @@ function Detail({ onSignOut }: { onSignOut: () => void }) {
           </article>
           <article>
             <h2>Immutable approval history</h2>
-            {approvals.data?.items.length ? (
+            {approvals.isLoading ? (
+              <p>Loading approval evidence…</p>
+            ) : approvals.isError ? (
+              <p role="alert">
+                {safeError(
+                  approvals.error,
+                  "Approval evidence is unavailable.",
+                )}
+              </p>
+            ) : approvals.data?.items.length ? (
               approvals.data.items.map((item) => (
                 <p key={item.id}>
                   {item.decision} · {new Date(item.decided_at).toLocaleString()}{" "}
@@ -323,25 +419,41 @@ function Detail({ onSignOut }: { onSignOut: () => void }) {
           </article>
           <article>
             <h2>Interpretation</h2>
-            {interpretations.data?.items.map((item, index) => (
-              <p key={index}>
-                {item.summary} · confidence {item.confidence}
-              </p>
-            )) || <p>Loading evidence…</p>}
+            {interpretations.isLoading ? (
+              <p>Loading evidence…</p>
+            ) : interpretations.isError ? (
+              <p role="alert">Evidence is unavailable.</p>
+            ) : (
+              interpretations.data?.items.map((item, index) => (
+                <p key={index}>
+                  {item.summary} · confidence {item.confidence}
+                </p>
+              )) || <p>No interpretation evidence.</p>
+            )}
           </article>
           <article>
             <h2>Routing evidence</h2>
-            {routing.data?.items.map((item, index) => (
-              <p key={index}>
-                {item.final_category} → {item.final_queue} · policy{" "}
-                {item.policy_semantic_version}
-              </p>
-            )) || <p>Loading evidence…</p>}
+            {routing.isLoading ? (
+              <p>Loading routing evidence…</p>
+            ) : routing.isError ? (
+              <p role="alert">Routing evidence is unavailable.</p>
+            ) : (
+              routing.data?.items.map((item, index) => (
+                <p key={index}>
+                  {item.final_category} → {item.final_queue} · policy{" "}
+                  {item.policy_semantic_version}
+                </p>
+              )) || <p>No routing evidence.</p>
+            )}
           </article>
         </div>
         <article aria-labelledby="audited-timeline-heading">
           <h2 id="audited-timeline-heading">Audited timeline</h2>
-          {timeline.data?.items ? (
+          {timeline.isLoading ? (
+            <p>Loading timeline…</p>
+          ) : timeline.isError ? (
+            <p role="alert">Audit evidence is unavailable.</p>
+          ) : timeline.data?.items ? (
             <div role="list" aria-label="Audited timeline">
               {timeline.data.items.map((item) => (
                 <div
@@ -377,6 +489,11 @@ function Detail({ onSignOut }: { onSignOut: () => void }) {
 
 export function App() {
   const [authenticated, setAuthenticated] = useState(tokenPresent());
+  useEffect(() => {
+    const expire = () => setAuthenticated(false);
+    window.addEventListener("demo-auth-expired", expire);
+    return () => window.removeEventListener("demo-auth-expired", expire);
+  }, []);
   return (
     <Routes>
       <Route

@@ -41,6 +41,22 @@ button {
   cursor: pointer;
   margin: 4px;
 }
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+textarea {
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  margin-top: 6px;
+  border: 1px solid #52637d;
+  border-radius: 8px;
+  background: #0f1726;
+  color: #e8edf7;
+  padding: 10px;
+  font: inherit;
+}
 .secondary {
   background: #26344b;
   color: #e8edf7;
